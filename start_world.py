@@ -1,3 +1,4 @@
+from asyncio.windows_events import NULL
 from concurrent.futures import process
 import glob
 import os
@@ -17,6 +18,9 @@ import random
 import time
 import numpy as np
 import cv2
+import dynamic_weather
+import generate_traffic
+import visualize_sensors
 
 #-------------------------------------
 #****** CAMERA IMAGE DIMENSIONS ******
@@ -38,6 +42,16 @@ def process_dist(measurement):
     m = np.array(measurement.raw_data)
     print(m)
 
+def refresh_weather(w, et, uf):
+        timestamp = world.wait_for_tick(seconds=30.0).timestamp
+        et += timestamp.delta_seconds
+        if et > uf:
+            w.tick(dynamic_weather.argsDefiner.speed * et)
+            world.set_weather(w.weather)
+            sys.stdout.write('\r' + str(w) + 12 * ' ')
+            sys.stdout.flush()
+            et = 0.0
+            
 try:
     #----------------------------------------------
     #****** CONNECT TO THE SIMULATION SERVER ******
@@ -73,18 +87,30 @@ try:
     #****** SPAWN LIDAR AND FIX IT TO THE VEHICLE ******
     #---------------------------------------------------
     lidar_bp = blueprint_library.find('sensor.lidar.ray_cast')
-    lidar_bp.set_attribute('horizontal_fov', 100.0)
     lidar = world.spawn_actor(lidar_bp, spawn, attach_to=vehicle)
 
     actor_list.append(vehicle)
     actor_list.append(rgb_cam)
     actor_list.append(lidar)
 
-    rgb_cam.listen(lambda data: process_img(data))
-    lidar.listen(lambda data: process_dist(data))
+    #lidar.listen(lambda data: process_dist(data))
+
+    print('generating traffic')
+    generate_traffic.generate()
+    print('opening sensors window')
+    visualize_sensors.run_simulation(visualize_sensors.argsDefiner(),client)
+
+    
+    speed_factor = dynamic_weather.argsDefiner.speed
+    update_freq = 0.1 / speed_factor
+
+    weather = dynamic_weather.Weather(world.get_weather())
+
+    elapsed_time = 0.0
 
     while True:
         world.tick()
+        refresh_weather(weather, elapsed_time, update_freq)
 
 except KeyboardInterrupt:
     pass

@@ -26,13 +26,13 @@ IMG_HEIGHT = 480
 
 actor_list = []
 
-#def process_img(image):
-    #i = np.array(image.raw_data)
-    #i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
-    #i3 = i2[:, :, :3]  # remove the alpha (basically, remove the 4th index  of every pixel. Converting RGBA to RGB)
-    #cv2.imshow("", i3)  # show it.
-    #cv2.waitKey(1)
-    #return i2/255.0  # normalize
+def process_img(image):
+    i = np.array(image.raw_data)
+    i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
+    i3 = i2[:, :, :3]  # remove the alpha (basically, remove the 4th index  of every pixel. Converting RGBA to RGB)
+    cv2.imshow("", i3)  # show it.
+    cv2.waitKey(1)
+    return i2/255.0  # normalize
 
 def process_dist(measurement):
     m = np.array(measurement.raw_data)

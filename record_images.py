@@ -1,8 +1,7 @@
-from asyncio.windows_events import NULL
 from concurrent.futures import process
 import glob
 import os
-from re import sub
+import re
 import sys
 
 try:
@@ -18,19 +17,18 @@ import random
 import time
 import numpy as np
 import cv2
-import dynamic_weather
-import generate_traffic
-import visualize_sensors
+import matplotlib.pyplot as plt
 
 #-------------------------------------
 #****** CAMERA IMAGE DIMENSIONS ******
 #-------------------------------------
-IMG_WIDTH = 640
-IMG_HEIGHT = 480
+IMG_WIDTH = 1280
+IMG_HEIGHT = 720
 
 actor_list = []
 
 def process_img(image):
+    image.save_to_disk('recs/%d.png'%image.frame)
     i = np.array(image.raw_data)
     i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
     i3 = i2[:, :, :3]  # remove the alpha (basically, remove the 4th index  of every pixel. Converting RGBA to RGB)
@@ -38,20 +36,12 @@ def process_img(image):
     cv2.waitKey(1)
     return i2/255.0  # normalize
 
+
+
 def process_dist(measurement):
     m = np.array(measurement.raw_data)
     print(m)
 
-def refresh_weather(w, et, uf):
-        timestamp = world.wait_for_tick(seconds=30.0).timestamp
-        et += timestamp.delta_seconds
-        if et > uf:
-            w.tick(dynamic_weather.argsDefiner.speed * et)
-            world.set_weather(w.weather)
-            sys.stdout.write('\r' + str(w) + 12 * ' ')
-            sys.stdout.flush()
-            et = 0.0
-            
 try:
     #----------------------------------------------
     #****** CONNECT TO THE SIMULATION SERVER ******
@@ -78,10 +68,13 @@ try:
     rgb_bp = blueprint_library.find('sensor.camera.rgb')
     rgb_bp.set_attribute('image_size_x', f'{IMG_WIDTH}')
     rgb_bp.set_attribute('image_size_y', f'{IMG_HEIGHT}')
-    rgb_bp.set_attribute('fov', '100')
+    rgb_bp.set_attribute('fov', '110')
+    rgb_bp.set_attribute('fstop', '1.0')
+    rgb_bp.set_attribute('sensor_tick', '0.03')
 
-    spawn = carla.Transform(carla.Location(x=2.5, z=0.7))
+    spawn = carla.Transform(carla.Location(x=3.5, z=1.2), carla.Rotation(pitch=-7))
     rgb_cam = world.spawn_actor(rgb_bp, spawn, attach_to=vehicle)
+    rgb_cam.pitch = -45.0
 
     #---------------------------------------------------
     #****** SPAWN LIDAR AND FIX IT TO THE VEHICLE ******
@@ -93,24 +86,10 @@ try:
     actor_list.append(rgb_cam)
     actor_list.append(lidar)
 
-    #lidar.listen(lambda data: process_dist(data))
-
-    print('generating traffic')
-    generate_traffic.generate()
-    print('opening sensors window')
-    visualize_sensors.run_simulation(visualize_sensors.argsDefiner(),client)
-
-    
-    speed_factor = dynamic_weather.argsDefiner.speed
-    update_freq = 0.1 / speed_factor
-
-    weather = dynamic_weather.Weather(world.get_weather())
-
-    elapsed_time = 0.0
+    rgb_cam.listen(lambda data: process_img(data))
 
     while True:
         world.tick()
-        refresh_weather(weather, elapsed_time, update_freq)
 
 except KeyboardInterrupt:
     pass

@@ -3,6 +3,7 @@ import glob
 import os
 import re
 import sys
+from PIL import Image
 
 try:
     sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
@@ -18,6 +19,7 @@ import time
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+import lane_detector as lane
 
 #-------------------------------------
 #****** CAMERA IMAGE DIMENSIONS ******
@@ -36,7 +38,13 @@ def process_img(image):
     cv2.waitKey(1)
     return i2/255.0  # normalize
 
-
+def testLaneDet(image):
+    i = np.array(image.raw_data)
+    i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
+    res = lane.detect(i2)
+    #res.save('lane_output/%d.png'%image.frame)
+    cv2.imshow("lanes",res)
+    cv2.waitKey(1)
 
 def process_dist(measurement):
     m = np.array(measurement.raw_data)
@@ -86,7 +94,7 @@ try:
     actor_list.append(rgb_cam)
     actor_list.append(lidar)
 
-    rgb_cam.listen(lambda data: process_img(data))
+    rgb_cam.listen(lambda data: testLaneDet(data))
 
     while True:
         world.tick()

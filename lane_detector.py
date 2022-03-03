@@ -21,7 +21,7 @@ def detect(img):
     img = cv2.bitwise_and(img[:,:,0], img[:,:,0], mask=stencil)
 
     # apply threshold
-    ret, thresh = cv2.threshold(img, 144, 200, cv2.THRESH_BINARY)
+    ret, thresh = cv2.threshold(img, 150, 200, cv2.THRESH_BINARY)
     lines = cv2.HoughLinesP(thresh, 1, np.pi/180, 50, maxLineGap=100)
 
     # draw Hough lines
@@ -29,4 +29,4 @@ def detect(img):
         x1, y1, x2, y2 = line[0]
         cv2.line(ofc, (x1, y1), (x2, y2), (0, 0, 255), 3)
 
-    return cv2.cvtColor(ofc, cv2.COLOR_BGR2RGB)
+    return ofc

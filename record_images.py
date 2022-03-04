@@ -65,10 +65,15 @@ try:
     #****** SPAWN TEST SUBJECT CAR ******
     #------------------------------------
     model3 = blueprint_library.filter('model3')[0]
+
     spawn = random.choice(world.get_map().get_spawn_points())
     vehicle = world.spawn_actor(model3, spawn)
+    spawn = random.choice(world.get_map().get_spawn_points())
+    vehicle_a = world.spawn_actor(model3, spawn)
+
     #subject.apply_control(carla.VehicleControl(throttle=1.0, steer=0.0)) #code for manual control
     vehicle.set_autopilot(True)
+    vehicle_a.set_autopilot(True)
     
     #--------------------------------------------------------
     #****** SPAWN RGB CAMERA AND FIX IT TO THE VEHICLE ******
@@ -81,21 +86,22 @@ try:
     rgb_bp.set_attribute('sensor_tick', '0.03')
 
     spawn = carla.Transform(carla.Location(x=3.5, z=1.2), carla.Rotation(pitch=-7))
-    rgb_cam = world.spawn_actor(rgb_bp, spawn, attach_to=vehicle)
-    rgb_cam.pitch = -45.0
+    rgb_cam = world.spawn_actor(rgb_bp, spawn, attach_to=vehicle_a)
+    rgb_cam_a = world.spawn_actor(rgb_bp, spawn, attach_to=vehicle)
 
     #---------------------------------------------------
     #****** SPAWN LIDAR AND FIX IT TO THE VEHICLE ******
     #---------------------------------------------------
     lidar_bp = blueprint_library.find('sensor.lidar.ray_cast')
     lidar = world.spawn_actor(lidar_bp, spawn, attach_to=vehicle)
+    lidar_a = world.spawn_actor(lidar_bp, spawn, attach_to=vehicle_a)
 
     actor_list.append(vehicle)
     actor_list.append(rgb_cam)
     actor_list.append(lidar)
 
     rgb_cam.listen(lambda data: testLaneDet(data))
-
+    lidar.listen(lambda point_cloud: point_cloud.save_to_disk('recs/%.6d.ply' % point_cloud.frame))
     while True:
         world.tick()
 

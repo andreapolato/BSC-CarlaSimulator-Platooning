@@ -78,8 +78,8 @@ try:
     PlatooningFollower = world.spawn_actor(audiTT, spawn)
 
     #subject.apply_control(carla.VehicleControl(throttle=1.0, steer=0.0)) #code for manual control
-    #PlatooningLeader.set_autopilot(True)
-    #PlatooningFollower.set_autopilot(True)
+    PlatooningLeader.set_autopilot(True)
+    PlatooningFollower.set_autopilot(True)
     
     #--------------------------------------------------------
     #****** SPAWN RGB CAMERA AND FIX IT TO THE VEHICLE ******
@@ -109,11 +109,15 @@ try:
     actor_list.append(LidarLeader)
     actor_list.append(LidarFollower)
 
-    rgbLeader.listen(lambda data: testLaneDet(data))
-    rgbFollower.listen(lambda data: testLaneDet(data))
+    #rgbLeader.listen(lambda data: testLaneDet(data))
+    #rgbFollower.listen(lambda data: testLaneDet(data))
     #lidar.listen(lambda point_cloud: point_cloud.save_to_disk('recs/%.6d.ply' % point_cloud.frame))
+
     while True:
         world.tick()
+        L = PlatooningLeader.get_control()
+        F = PlatooningFollower.get_control()
+        print("Leader throttle: " + str(L.throttle) + "\n")
 
 except KeyboardInterrupt:
     pass

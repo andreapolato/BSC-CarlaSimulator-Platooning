@@ -17,6 +17,7 @@ except IndexError:
 import carla
 import random
 import time
+import math
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -24,6 +25,7 @@ import lane_detector as lane
 from time import sleep
 from visualize_sensors import DisplayManager, SensorManager
 import curved_lane_detection as det
+import csv
 
 #-------------------------------------
 #****** CAMERA IMAGE DIMENSIONS ******
@@ -54,6 +56,39 @@ def testLaneDet(image):
 def process_dist(measurement):
     m = np.array(measurement.raw_data)
     print(m)
+
+
+def convert_time(seconds):
+    seconds = seconds%(24*3600)
+    hrs = (seconds//3600)
+    seconds %= 3600
+    mins = seconds//60
+    seconds %= 60
+    mill = (seconds*1000)%1000
+    return "%d:%02d:%02d:%04d"%(hrs,mins,seconds,mill)
+
+def extract_data(snap,vehicle,f):
+    vehicle_snap=snap.find(vehicle.id)
+    transform = vehicle_snap.get_transform()
+    frame = str(snap.frame)
+    print("frame: "+frame)
+    time = convert_time(snap.timestamp.elapsed_seconds)
+    id = str(vehicle.id)
+    type = str(vehicle.type_id)
+    x = str("{0:10.3f}".format(transform.location.x))
+    y = str("{0:10.3f}".format(transform.location.y))
+    z = str("{0:10.3f}".format(transform.location.z))
+    vel = vehicle_snap.get_velocity()
+    speed = str('%15.2f'%(3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)))
+    gear = str(vehicle.get_control().gear)
+    output = [frame, time, id, type, x, y, z, speed, gear]
+    w = csv.writer(f)
+    w.writerow(output)
+
+def get_vehicle_data(snap,f):
+    for vehicle in actor_list: #TROVARE UN FILTRO PER VEICOLI
+        if isinstance(vehicle, carla.Vehicle):
+            extract_data(snap,vehicle,f)
 
 try:
     #----------------------------------------------
@@ -111,9 +146,21 @@ try:
     actor_list.append(LidarLeader)
     actor_list.append(LidarFollower)
 
+    dir = 'recs/' + time.strftime("%Y%m%d-%H%M%S")
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+    with open(dir + '/vehicle_data.csv', 'w', newline='') as f:
+        w = csv.writer(f)
+        print('CSV file created.')
+        w.writeheader(['snap','time', 'id', 'type', 'x', 'y', 'z', 'Km/h', 'Gear'])
+    f = open(dir + '/vehicle_data.csv','a+', newline='')
+
     rgbLeader.listen(lambda data: testLaneDet(data))
     #rgbFollower.listen(lambda data: testLaneDet(data))
     #lidar.listen(lambda point_cloud: point_cloud.save_to_disk('recs/%.6d.ply' % point_cloud.frame))
+    world.on_tick(lambda snap: get_vehicle_data(snap, f))
+
 
     while True:
         world.tick()

@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import lane_detector as lane
 from time import sleep
 from visualize_sensors import DisplayManager, SensorManager
+import curved_lane_detection as det
 
 #-------------------------------------
 #****** CAMERA IMAGE DIMENSIONS ******
@@ -44,8 +45,9 @@ def process_img(image):
 def testLaneDet(image):
     i = np.array(image.raw_data)
     i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
-    res = lane.detect(i2)
+    res, dist = det.detect_steering(i2)
     #res.save('lane_output/%d.png'%image.frame)
+    print("Distance from the center of the lane: %f"%dist)
     cv2.imshow("lanes",res)
     cv2.waitKey(1)
 
@@ -109,7 +111,7 @@ try:
     actor_list.append(LidarLeader)
     actor_list.append(LidarFollower)
 
-    #rgbLeader.listen(lambda data: testLaneDet(data))
+    rgbLeader.listen(lambda data: testLaneDet(data))
     #rgbFollower.listen(lambda data: testLaneDet(data))
     #lidar.listen(lambda point_cloud: point_cloud.save_to_disk('recs/%.6d.ply' % point_cloud.frame))
 
@@ -118,6 +120,7 @@ try:
         L = PlatooningLeader.get_control()
         F = PlatooningFollower.get_control()
         print("Leader throttle: " + str(L.throttle) + "\n")
+
 
 except KeyboardInterrupt:
     pass

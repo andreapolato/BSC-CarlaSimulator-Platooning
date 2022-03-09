@@ -1,3 +1,5 @@
+from ast import Delete
+from turtle import distance
 import numpy as np
 import pandas as pd
 import cv2
@@ -247,16 +249,40 @@ def draw_lanes(img, left_fit, right_fit):
     
     left = np.array([np.transpose(np.vstack([left_fit, ploty]))])
     right = np.array([np.flipud(np.transpose(np.vstack([right_fit, ploty])))])
-    centerleft = np.array([np.transpose(np.vstack([left_fit + (right_fit-left_fit)/2 - 10, ploty]))])
-    centerright = np.array([np.flipud(np.transpose(np.vstack([right_fit - (right_fit-left_fit)/2 + 10, ploty])))])
     points = np.hstack((left, right))
+
+    centerleft = np.array([np.transpose(np.vstack([left_fit + (right_fit-left_fit)/2 - 2, ploty]))])
+    centerright = np.array([np.flipud(np.transpose(np.vstack([right_fit - (right_fit-left_fit)/2 + 2, ploty])))])
     divider = np.hstack((centerleft, centerright))
+
+    Ldirection = np.array([np.transpose(np.vstack([left_fit*0 + 638, ploty]))])
+    Rdirection = np.array([np.flipud(np.transpose(np.vstack([left_fit*0 + 641, ploty])))])
+    direction = np.hstack((Ldirection, Rdirection))
     
-    cv2.fillPoly(color_img, np.int_(points), (0,200,255))
+    cv2.fillPoly(color_img, np.int_(points), (0,200,100))
     cv2.fillPoly(color_img, np.int_(divider), (255,0,0))
+    cv2.fillPoly(color_img, np.int_(direction), (0,0,255))
+    
     inv_perspective = inv_perspective_warp(color_img)
     inv_perspective = cv2.addWeighted(img, 1, inv_perspective, 0.7, 0)
-    return inv_perspective
+    
+    ld = Ldirection[0,280,0]
+    rd = Rdirection[0,280,0]
+    cl = centerleft[0,280,0]
+    cr = centerright[0,280,0]
+    max_dist=abs(rd-cl)
+    if cl>rd:
+        max_dist=abs(rd-cl)
+    if cr<ld:
+        max_dist=-abs(cr-ld)
+    return inv_perspective, max_dist
+
+def detect_steering(image):
+    dst = pipeline(image)
+    dst = perspective_warp(dst, dst_size=(1280,720))
+    out_img, curves, lanes, ploty = sliding_window(dst)
+    img_, dist = draw_lanes(image, curves[0], curves[1])
+    return img_, dist
 
 def main():
     img = cv2.imread('recs/91502.png')
@@ -270,16 +296,12 @@ def main():
     plt.imshow(dst)
     plt.show()
 
-    #%matplotlib gtk
     out_img, curves, lanes, ploty = sliding_window(dst)
     plt.imshow(out_img)
     plt.show()
-    #plt.plot(curves[0], ploty, color='yellow', linewidth=1)
-    #plt.plot(curves[1], ploty, color='yellow', linewidth=1)
     print(np.asarray(curves).shape)
-    curverad=get_curve(img, curves[0],curves[1])
-    print(curverad)
-    img_ = draw_lanes(img, curves[0], curves[1])
+    img_, dist = draw_lanes(img, curves[0], curves[1])
+    print("Distance between lane center and car direction marker: %f"%dist)
     plt.imshow(img_, cmap='hsv')
     plt.show()
 

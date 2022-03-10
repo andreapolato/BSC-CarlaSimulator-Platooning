@@ -21,7 +21,7 @@ def undistort_img():
     imgpoints = []
 
     # Get directory for all calibration images
-    images = glob.glob('recs/*.png')
+    images = glob.glob('camera_cal/*.jpg')
 
     for indx, fname in enumerate(images):
         img = cv2.imread(fname)
@@ -57,7 +57,7 @@ def undistort(img, cal_dir='camera_cal/cal_pickle.p'):
 
 
 
-def pipeline(img, s_thresh=(30, 255), sx_thresh=(24, 255)):
+def pipeline(img, s_thresh=(50, 255), sx_thresh=(50, 255)):
     img = undistort(img)
     img = np.copy(img)
     # Convert to HLS color space and separate the V channel
@@ -123,9 +123,11 @@ def sliding_window(img, nwindows=9, margin=150, minpix = 1, draw_windows=True):
     histogram = get_hist(img)
     # find peaks of left and right halves
     midpoint = int(histogram.shape[0]/2)
+    print('midpoint: ' + str(midpoint) + '\n')
     leftx_base = np.argmax(histogram[:midpoint])
     rightx_base = np.argmax(histogram[midpoint:]) + midpoint
-    
+    print('leftx_base: ' + str(leftx_base) + '\n')
+    print('rightx_base: ' + str(rightx_base) + '\n')
     
     # Set height of windows
     window_height = np.int(img.shape[0]/nwindows)
@@ -134,8 +136,8 @@ def sliding_window(img, nwindows=9, margin=150, minpix = 1, draw_windows=True):
     nonzeroy = np.array(nonzero[0])
     nonzerox = np.array(nonzero[1])
     # Current positions to be updated for each window
-    leftx_current = leftx_base-80
-    rightx_current = rightx_base+80
+    leftx_current = leftx_base#-80
+    rightx_current = rightx_base#+80
     
     
     # Create empty lists to receive left and right lane pixel indices
@@ -172,14 +174,14 @@ def sliding_window(img, nwindows=9, margin=150, minpix = 1, draw_windows=True):
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
         
         
-#        if len(good_right_inds) > minpix:        
-#            rightx_current = np.int(np.mean([leftx_current +900, np.mean(nonzerox[good_right_inds])]))
-#        elif len(good_left_inds) > minpix:
-#            rightx_current = np.int(np.mean([np.mean(nonzerox[good_left_inds]) +900, rightx_current]))
-#        if len(good_left_inds) > minpix:
-#            leftx_current = np.int(np.mean([rightx_current -900, np.mean(nonzerox[good_left_inds])]))
-#        elif len(good_right_inds) > minpix:
-#            leftx_current = np.int(np.mean([np.mean(nonzerox[good_right_inds]) -900, leftx_current]))
+        if len(good_right_inds) > minpix:        
+            rightx_current = np.int(np.mean([leftx_current +900, np.mean(nonzerox[good_right_inds])]))
+        elif len(good_left_inds) > minpix:
+            rightx_current = np.int(np.mean([np.mean(nonzerox[good_left_inds]) +900, rightx_current]))
+        if len(good_left_inds) > minpix:
+            leftx_current = np.int(np.mean([rightx_current -900, np.mean(nonzerox[good_left_inds])]))
+        elif len(good_right_inds) > minpix:
+            leftx_current = np.int(np.mean([np.mean(nonzerox[good_right_inds]) -900, leftx_current]))
 
 
     # Concatenate the arrays of indices
@@ -285,7 +287,7 @@ def detect_steering(image):
     return img_, dist
 
 def main():
-    img = cv2.imread('recs/91502.png')
+    img = cv2.imread('recs/20220309-161058raw_imgs/40090.png')
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     dst = pipeline(img)
     dst = perspective_warp(dst, dst_size=(1280,720))

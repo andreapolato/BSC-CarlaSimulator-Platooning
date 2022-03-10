@@ -17,6 +17,7 @@ except IndexError:
 import carla
 import random
 import time
+import math
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -24,6 +25,7 @@ import lane_detector as lane
 from time import sleep
 from visualize_sensors import DisplayManager, SensorManager
 import curved_lane_detection as det
+import csv
 
 #-------------------------------------
 #****** CAMERA IMAGE DIMENSIONS ******
@@ -42,18 +44,50 @@ def process_img(image):
     cv2.waitKey(1)
     return i2/255.0  # normalize
 
-def testLaneDet(image):
+def detect_lane(image, dir):
+    image.save_to_disk(dir+'/raw_imgs/%d.png'%image.frame)
     i = np.array(image.raw_data)
     i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
     res, dist = det.detect_steering(i2)
-    #res.save('lane_output/%d.png'%image.frame)
-    print("Distance from the center of the lane: %f"%dist)
-    cv2.imshow("lanes",res)
-    cv2.waitKey(1)
+    cv2.imwrite(dir+'/%d.png'%image.frame, res)
+    #cv2.imshow("lanes",res)
+    #cv2.waitKey(1)
 
 def process_dist(measurement):
     m = np.array(measurement.raw_data)
     print(m)
+
+
+def convert_time(seconds):
+    seconds = seconds%(24*3600)
+    hrs = (seconds//3600)
+    seconds %= 3600
+    mins = seconds//60
+    seconds %= 60
+    mill = (seconds*1000)%1000
+    return "%d:%02d:%02d:%04d"%(hrs,mins,seconds,mill)
+
+def extract_data(snap,vehicle,f):
+    vehicle_snap=snap.find(vehicle.id)
+    transform = vehicle_snap.get_transform()
+    frame = str(snap.frame)
+    time = convert_time(snap.timestamp.elapsed_seconds)
+    id = str(vehicle.id)
+    type = str(vehicle.type_id)
+    x = str("{0:10.3f}".format(transform.location.x))
+    y = str("{0:10.3f}".format(transform.location.y))
+    z = str("{0:10.3f}".format(transform.location.z))
+    vel = vehicle_snap.get_velocity()
+    speed = str('%15.2f'%(3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)))
+    gear = str(vehicle.get_control().gear)
+    w = csv.DictWriter(f, fieldnames=fn)
+    output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Km/h':speed, 'Gear':gear}
+    w.writerow(output)
+
+def get_vehicle_data(snap,f):
+    for vehicle in actor_list: #TROVARE UN FILTRO PER VEICOLI
+        if isinstance(vehicle, carla.Vehicle):
+            extract_data(snap,vehicle,f)
 
 try:
     #----------------------------------------------
@@ -63,7 +97,7 @@ try:
     client.set_timeout(5.0)
     
     world = client.get_world()
-    
+
     blueprint_library = world.get_blueprint_library()
 
     #------------------------------------
@@ -73,10 +107,18 @@ try:
     audiTT = blueprint_library.filter('tt')[0]
 
     #spawn = random.choice(world.get_map().get_spawn_points())
-    spawn = carla.Transform(carla.Location(x=73.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
+    #print(spawn)
+
+    #Town01 spawn
+    spawn = carla.Transform(carla.Location(x=63.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
+    #Town02 spawn
+    #spawn = carla.Transform(carla.Location(x=162.920029, y=237.429962, z=0.500000), carla.Rotation(pitch=0.000000, yaw=-179.999634, roll=0.000000))
     PlatooningLeader = world.spawn_actor(model3, spawn)
     
-    spawn = carla.Transform(carla.Location(x=63.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
+    #Town01 spawn
+    spawn = carla.Transform(carla.Location(x=73.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
+    #Town02 spawn
+    #spawn = carla.Transform(carla.Location(x=172.920029, y=237.429962, z=0.500000), carla.Rotation(pitch=0.000000, yaw=-179.999634, roll=0.000000))
     PlatooningFollower = world.spawn_actor(audiTT, spawn)
 
     #subject.apply_control(carla.VehicleControl(throttle=1.0, steer=0.0)) #code for manual control
@@ -111,15 +153,27 @@ try:
     actor_list.append(LidarLeader)
     actor_list.append(LidarFollower)
 
-    rgbLeader.listen(lambda data: testLaneDet(data))
+    dir = 'recs/' + time.strftime("%Y%m%d-%H%M%S")
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+    with open(dir + '/vehicle_data.csv', 'w', newline='') as f:
+        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Km/h', 'Gear']
+        w = csv.DictWriter(f, fieldnames=fn)
+        print('CSV file created.')
+        w.writeheader()
+    f = open(dir + '/vehicle_data.csv','a+', newline='')
+
+    rgbLeader.listen(lambda data: detect_lane(data, dir))
     #rgbFollower.listen(lambda data: testLaneDet(data))
     #lidar.listen(lambda point_cloud: point_cloud.save_to_disk('recs/%.6d.ply' % point_cloud.frame))
+    world.on_tick(lambda snap: get_vehicle_data(snap, f))
+
 
     while True:
         world.tick()
         L = PlatooningLeader.get_control()
         F = PlatooningFollower.get_control()
-        print("Leader throttle: " + str(L.throttle) + "\n")
 
 
 except KeyboardInterrupt:

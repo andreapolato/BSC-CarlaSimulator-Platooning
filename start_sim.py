@@ -44,14 +44,14 @@ def process_img(image):
     cv2.waitKey(1)
     return i2/255.0  # normalize
 
-def testLaneDet(image):
+def detect_lane(image, dir):
+    image.save_to_disk(dir+'/raw_imgs/%d.png'%image.frame)
     i = np.array(image.raw_data)
     i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
     res, dist = det.detect_steering(i2)
-    #res.save('lane_output/%d.png'%image.frame)
-    print("Distance from the center of the lane: %f"%dist)
-    cv2.imshow("lanes",res)
-    cv2.waitKey(1)
+    cv2.imwrite(dir+'/%d.png'%image.frame, res)
+    #cv2.imshow("lanes",res)
+    #cv2.waitKey(1)
 
 def process_dist(measurement):
     m = np.array(measurement.raw_data)
@@ -71,7 +71,6 @@ def extract_data(snap,vehicle,f):
     vehicle_snap=snap.find(vehicle.id)
     transform = vehicle_snap.get_transform()
     frame = str(snap.frame)
-    print("frame: "+frame)
     time = convert_time(snap.timestamp.elapsed_seconds)
     id = str(vehicle.id)
     type = str(vehicle.type_id)
@@ -81,8 +80,8 @@ def extract_data(snap,vehicle,f):
     vel = vehicle_snap.get_velocity()
     speed = str('%15.2f'%(3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)))
     gear = str(vehicle.get_control().gear)
-    output = [frame, time, id, type, x, y, z, speed, gear]
-    w = csv.writer(f)
+    w = csv.DictWriter(f, fieldnames=fn)
+    output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Km/h':speed, 'Gear':gear}
     w.writerow(output)
 
 def get_vehicle_data(snap,f):
@@ -98,7 +97,7 @@ try:
     client.set_timeout(5.0)
     
     world = client.get_world()
-    
+
     blueprint_library = world.get_blueprint_library()
 
     #------------------------------------
@@ -108,10 +107,18 @@ try:
     audiTT = blueprint_library.filter('tt')[0]
 
     #spawn = random.choice(world.get_map().get_spawn_points())
-    spawn = carla.Transform(carla.Location(x=73.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
+    #print(spawn)
+
+    #Town01 spawn
+    spawn = carla.Transform(carla.Location(x=63.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
+    #Town02 spawn
+    #spawn = carla.Transform(carla.Location(x=162.920029, y=237.429962, z=0.500000), carla.Rotation(pitch=0.000000, yaw=-179.999634, roll=0.000000))
     PlatooningLeader = world.spawn_actor(model3, spawn)
     
-    spawn = carla.Transform(carla.Location(x=63.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
+    #Town01 spawn
+    spawn = carla.Transform(carla.Location(x=73.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
+    #Town02 spawn
+    #spawn = carla.Transform(carla.Location(x=172.920029, y=237.429962, z=0.500000), carla.Rotation(pitch=0.000000, yaw=-179.999634, roll=0.000000))
     PlatooningFollower = world.spawn_actor(audiTT, spawn)
 
     #subject.apply_control(carla.VehicleControl(throttle=1.0, steer=0.0)) #code for manual control
@@ -151,12 +158,13 @@ try:
         os.makedirs(dir)
 
     with open(dir + '/vehicle_data.csv', 'w', newline='') as f:
-        w = csv.writer(f)
+        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Km/h', 'Gear']
+        w = csv.DictWriter(f, fieldnames=fn)
         print('CSV file created.')
-        w.writeheader(['snap','time', 'id', 'type', 'x', 'y', 'z', 'Km/h', 'Gear'])
+        w.writeheader()
     f = open(dir + '/vehicle_data.csv','a+', newline='')
 
-    rgbLeader.listen(lambda data: testLaneDet(data))
+    rgbLeader.listen(lambda data: detect_lane(data, dir))
     #rgbFollower.listen(lambda data: testLaneDet(data))
     #lidar.listen(lambda point_cloud: point_cloud.save_to_disk('recs/%.6d.ply' % point_cloud.frame))
     world.on_tick(lambda snap: get_vehicle_data(snap, f))
@@ -166,7 +174,6 @@ try:
         world.tick()
         L = PlatooningLeader.get_control()
         F = PlatooningFollower.get_control()
-        print("Leader throttle: " + str(L.throttle) + "\n")
 
 
 except KeyboardInterrupt:

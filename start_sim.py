@@ -1,4 +1,5 @@
 from concurrent.futures import process
+from dis import dis
 import glob
 from multiprocessing.connection import wait
 import os
@@ -44,18 +45,21 @@ def process_img(image):
     cv2.waitKey(1)
     return i2/255.0  # normalize
 
-def detect_lane(image, dir):
+def manage_vehicle(image, dir, vehicle):
     image.save_to_disk(dir+'/raw_imgs/%d.png'%image.frame)
     i = np.array(image.raw_data)
     i2 = i.reshape((IMG_HEIGHT, IMG_WIDTH, 4))
-    res, dist = det.detect_steering(i2)
+    #res, dist = det.detect_steering(i2)
+    res, dist = lane.detect(i2)
     cv2.imwrite(dir+'/%d.png'%image.frame, res)
+    vehicle.apply_control(carla.VehicleControl(throttle=0.4, steer=dist/960))
     #cv2.imshow("lanes",res)
     #cv2.waitKey(1)
 
-def process_dist(measurement):
-    m = np.array(measurement.raw_data)
-    print(m)
+def steer(dist):
+    if abs(dist>16):
+        return dist/640
+    return 0.0
 
 
 def convert_time(seconds):
@@ -79,16 +83,34 @@ def extract_data(snap,vehicle,f):
     z = str("{0:10.3f}".format(transform.location.z))
     vel = vehicle_snap.get_velocity()
     speed = str('%15.2f'%(3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)))
-    gear = str(vehicle.get_control().gear)
-    w = csv.DictWriter(f, fieldnames=fn)
-    output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Km/h':speed, 'Gear':gear}
-    w.writerow(output)
+    #gear = str(vehicle.get_control().gear)
+    throttle = str(vehicle.get_control().throttle)
+    steer = str(vehicle.get_control().steer)
+    brake = str(vehicle.get_control().brake)
+    with open(dir + '/vehicle_data_%s.csv'%('leader' if vehicle==PlatooningLeader else 'follower'), 'a+', newline='') as f:
+        w = csv.DictWriter(f, fieldnames=fn)
+        output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Km/h':speed, 'Throttle':throttle, 'Steer':steer, 'Brake':brake}
+        w.writerow(output)
+    return throttle, steer
 
 def get_vehicle_data(snap,f):
     for vehicle in actor_list: #TROVARE UN FILTRO PER VEICOLI
         if isinstance(vehicle, carla.Vehicle):
             extract_data(snap,vehicle,f)
-
+            if vehicle==PlatooningFollower:
+                with open(dir + '/vehicle_data_leader.csv', newline='') as f:
+                    r = csv.DictReader(f, fieldnames=fn)
+                    for row in r:
+                        vehicle_snap=snap.find(vehicle.id)
+                        transform = vehicle_snap.get_transform()
+                        x = str("{0:10.3f}".format(transform.location.x))
+                        y = str("{0:10.3f}".format(transform.location.y))
+                        if row['Type']=='vehicle.tesla.model3':
+                            print(x,y,row['X'],row['Y'])
+                            if abs(float(row['X'])-float(x))<0.1 and abs(float(row['Y'])-float(y))<0.1:
+                                PlatooningFollower.apply_control(carla.VehicleControl(throttle=float(row['Throttle']), steer=float(row['Steer']), brake=float(row['Brake'])))
+                            else:
+                                PlatooningFollower.apply_control(carla.VehicleControl(throttle=0.0, steer=0.0))
 try:
     #----------------------------------------------
     #****** CONNECT TO THE SIMULATION SERVER ******
@@ -100,30 +122,23 @@ try:
 
     blueprint_library = world.get_blueprint_library()
 
+    for v in world.get_actors():
+        if isinstance(v, carla.Vehicle):
+            v.destroy()
+
     #------------------------------------
     #****** SPAWN TEST SUBJECT CAR ******
     #------------------------------------
     model3 = blueprint_library.filter('model3')[0]
     audiTT = blueprint_library.filter('tt')[0]
 
-    #spawn = random.choice(world.get_map().get_spawn_points())
-    #print(spawn)
+    spawn = random.choice(world.get_map().get_spawn_points())
 
-    #Town01 spawn
-    spawn = carla.Transform(carla.Location(x=63.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
-    #Town02 spawn
-    #spawn = carla.Transform(carla.Location(x=162.920029, y=237.429962, z=0.500000), carla.Rotation(pitch=0.000000, yaw=-179.999634, roll=0.000000))
     PlatooningLeader = world.spawn_actor(model3, spawn)
-    
-    #Town01 spawn
-    spawn = carla.Transform(carla.Location(x=73.075226, y=13.414804, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.840790, roll=0.000000))
-    #Town02 spawn
-    #spawn = carla.Transform(carla.Location(x=172.920029, y=237.429962, z=0.500000), carla.Rotation(pitch=0.000000, yaw=-179.999634, roll=0.000000))
-    PlatooningFollower = world.spawn_actor(audiTT, spawn)
-
-    #subject.apply_control(carla.VehicleControl(throttle=1.0, steer=0.0)) #code for manual control
     PlatooningLeader.set_autopilot(True)
-    PlatooningFollower.set_autopilot(True)
+
+    time.sleep(2)
+    PlatooningFollower = world.spawn_actor(audiTT, spawn)
     
     #--------------------------------------------------------
     #****** SPAWN RGB CAMERA AND FIX IT TO THE VEHICLE ******
@@ -133,48 +148,47 @@ try:
     rgb_bp.set_attribute('image_size_y', f'{IMG_HEIGHT}')
     rgb_bp.set_attribute('fov', '110')
     rgb_bp.set_attribute('fstop', '1.0')
-    rgb_bp.set_attribute('sensor_tick', '0.03')
+    rgb_bp.set_attribute('sensor_tick', '0.02')
 
     spawn = carla.Transform(carla.Location(x=3.5, z=1.2), carla.Rotation(pitch=-7))
     rgbLeader = world.spawn_actor(rgb_bp, spawn, attach_to=PlatooningLeader)
-    rgbFollower = world.spawn_actor(rgb_bp, spawn, attach_to=PlatooningFollower)
+    #rgbFollower = world.spawn_actor(rgb_bp, spawn, attach_to=PlatooningFollower)
 
     #---------------------------------------------------
     #****** SPAWN LIDAR AND FIX IT TO THE VEHICLE ******
     #---------------------------------------------------
     lidar_bp = blueprint_library.find('sensor.lidar.ray_cast')
     LidarLeader = world.spawn_actor(lidar_bp, spawn, attach_to=PlatooningLeader)
-    LidarFollower = world.spawn_actor(lidar_bp, spawn, attach_to=PlatooningFollower)
 
     actor_list.append(PlatooningLeader)
     actor_list.append(PlatooningFollower)
     actor_list.append(rgbLeader)
-    actor_list.append(rgbFollower)
     actor_list.append(LidarLeader)
-    actor_list.append(LidarFollower)
 
     dir = 'recs/' + time.strftime("%Y%m%d-%H%M%S")
     if not os.path.exists(dir):
         os.makedirs(dir)
 
-    with open(dir + '/vehicle_data.csv', 'w', newline='') as f:
-        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Km/h', 'Gear']
+    with open(dir + '/vehicle_data_leader.csv', 'w', newline='') as f:
+        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Km/h', 'Throttle', 'Steer', 'Brake']
         w = csv.DictWriter(f, fieldnames=fn)
         print('CSV file created.')
         w.writeheader()
-    f = open(dir + '/vehicle_data.csv','a+', newline='')
 
-    rgbLeader.listen(lambda data: detect_lane(data, dir))
+    with open(dir + '/vehicle_data_follower.csv', 'w', newline='') as f:
+        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Km/h', 'Throttle', 'Steer', 'Brake']
+        w = csv.DictWriter(f, fieldnames=fn)
+        print('CSV file created.')
+        w.writeheader()
+    #f = open(dir + '/vehicle_data.csv','a+', newline='')
+
+    rgbLeader.listen(lambda data: manage_vehicle(data, dir, PlatooningLeader))
     #rgbFollower.listen(lambda data: testLaneDet(data))
     #lidar.listen(lambda point_cloud: point_cloud.save_to_disk('recs/%.6d.ply' % point_cloud.frame))
     world.on_tick(lambda snap: get_vehicle_data(snap, f))
 
-
     while True:
-        world.tick()
-        L = PlatooningLeader.get_control()
-        F = PlatooningFollower.get_control()
-
+        time.sleep(0.01)
 
 except KeyboardInterrupt:
     pass

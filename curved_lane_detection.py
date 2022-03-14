@@ -287,7 +287,7 @@ def detect_steering(image):
     return img_, dist
 
 def main():
-    img = cv2.imread('recs/20220309-161058raw_imgs/40090.png')
+    img = cv2.imread('recs/1857.png')
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     dst = pipeline(img)
     dst = perspective_warp(dst, dst_size=(1280,720))

@@ -71,28 +71,49 @@ def record_vehicle_data(snap):
             extract_data(snap,vehicle)
     #t,s,b = manage_follower(snap)
     
+def set_speed(fspeed,lspeed):
+    if lspeed-fspeed<-10:
+        return 0.0, 1.0
+    if lspeed-fspeed<0:
+        return 0.0, 0.3
+    elif lspeed-fspeed<4:
+        return 0.4, 0.0
+    elif lspeed-fspeed<10:
+        return 0.8, 0.0
+    else:
+        return 1.0, 0.0
 
 def manage_follower(snap):
     with open(dir + '/vehicle_data_leader.csv', newline='') as f:
         r = csv.DictReader(f, fieldnames=fn)
-        t = s = b = v = 0.0
+        vehicle_snap = snap.find(PlatooningFollower.id)
+        transform = vehicle_snap.get_transform()
+        vel = vehicle_snap.get_velocity()
+        fspeed = float('%15.2f'%(3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)))
+        fx = float("{0:10.3f}".format(transform.location.x))
+        fy = float("{0:10.3f}".format(transform.location.y))
+        n=0
+        t=s=b=0
         for row in r:
-            if row['Snap'] == str(snap.frame-70):             
-                vehicle_snap=snap.find(PlatooningFollower.id)
-                transform = vehicle_snap.get_transform()
-                #fx = float("{0:10.3f}".format(transform.location.x))
-                #fy = float("{0:10.3f}".format(transform.location.y))
-                #lx = float(row['X'])
-                #ly = float(row['Y'])
-                #curr_fit = abs(fx-lx) + abs(fy-ly)
-                #print(fx,fy,lx,ly,curr_fit)
-                #if curr_fit<best_fit:
-                t = float(row['Throttle'])
-                s = float(row['Steer'])
-                b = float(row['Brake'])
-                v = float(row['Km/h'])
-                PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
-#    return t,s,b
+            if n!=0:
+                dx = abs(float(row['X']) - fx)
+                dy = abs(float(row['Y']) - fy)
+                
+                if row['Snap'] == str(snap.frame):
+                    lspeed = float(row['Km/h'])
+                    delta = lspeed-fspeed
+                    if (delta>=0):
+                        t = delta/10 if delta/10 <= 1.0 else 1.0
+                        b = 0.0
+                        PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
+                    else:
+                        t = 0.0
+                        b = -delta/10 if -delta/10 <= 1.0 else 1.0
+                        PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
+                
+            else:
+                n+=1
+                        
         
 try:
     #----------------------------------------------
@@ -125,8 +146,7 @@ try:
 
     time.sleep(2)
     PlatooningFollower = world.spawn_actor(audiTT, spawn)
-    PlatooningFollower.apply_control(carla.VehicleControl(
-        throttle=1.0, steer=0.0, brake=0.0))
+    PlatooningFollower.apply_control(carla.VehicleControl(throttle=1.0, steer=0.0, brake=0.0))
     actor_list.append(PlatooningLeader)
     actor_list.append(PlatooningFollower)
 

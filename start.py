@@ -71,17 +71,21 @@ def record_vehicle_data(snap):
             extract_data(snap,vehicle)
     #t,s,b = manage_follower(snap)
     
-def set_speed(fspeed,lspeed):
-    if lspeed-fspeed<-10:
-        return 0.0, 1.0
-    if lspeed-fspeed<0:
-        return 0.0, 0.3
-    elif lspeed-fspeed<4:
-        return 0.4, 0.0
-    elif lspeed-fspeed<10:
-        return 0.8, 0.0
-    else:
-        return 1.0, 0.0
+def set_steer(fx,fy):
+    with open(dir + '/vehicle_data_leader.csv', newline='') as f:
+        r = csv.DictReader(f, fieldnames=fn)
+        n=0
+        s=0.0
+        for row in r:
+            if n!=0:
+                lx = float(row['X'])
+                ly = float(row['Y'])
+                if abs(lx-fx)<=2.0 and abs(ly-fy)<=2.0:
+                    s=float(row['Steer'])
+                    return s
+            else:
+                n+=1
+        return s
 
 def manage_follower(snap):
     with open(dir + '/vehicle_data_leader.csv', newline='') as f:
@@ -96,19 +100,18 @@ def manage_follower(snap):
         t=s=b=0
         for row in r:
             if n!=0:
-                dx = abs(float(row['X']) - fx)
-                dy = abs(float(row['Y']) - fy)
-                
                 if row['Snap'] == str(snap.frame):
                     lspeed = float(row['Km/h'])
                     delta = lspeed-fspeed
                     if (delta>=0):
-                        t = delta/10 if delta/10 <= 1.0 else 1.0
+                        t = delta/10+0.1 if delta/10+0.1 <= 1.0 else 1.0
                         b = 0.0
+                        s = set_steer(fx,fy)
                         PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
                     else:
                         t = 0.0
                         b = -delta/10 if -delta/10 <= 1.0 else 1.0
+                        s = set_steer(fx,fy)
                         PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
                 
             else:

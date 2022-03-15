@@ -30,10 +30,10 @@ import csv
 
 IMG_WIDTH = 1280
 IMG_HEIGHT = 720
-N=1
 
 actor_list = []
 snap_list = []
+big_dist = True
 
 def convert_time(seconds):
     seconds = seconds%(24*3600)
@@ -103,27 +103,34 @@ def manage_follower(snap):
                 if row['Snap'] == str(snap.frame):
                     lspeed = float(row['Km/h'])
                     delta = lspeed-fspeed
+                    global big_dist
                     if (delta>=0):
-                        t = delta/10+0.1 if delta/10+0.1 <= 1.0 else 1.0
-                        b = 0.0
-                        s = set_steer(fx,fy)
-                        PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
+                        if big_dist:
+                            t = 1.0
+                            b = 0.0
+                            s = set_steer(fx,fy)
+                        else:
+                            t = delta/10+0.1 if delta/10+0.1 <= 1.0 else 1.0
+                            b = 0.0
+                            s = set_steer(fx,fy)
+                        #PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
                     else:
                         t = 0.0
                         b = -delta/10 if -delta/10 <= 1.0 else 1.0
                         s = set_steer(fx,fy)
-                        PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
-                
+                    PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
             else:
                 n+=1
 
 def get_points(points):
+    min = 500
     for p in points:
-        if p.point.z>-0.7:
-            with open(dir + '/lidar_data_follower.csv', 'a+', newline='') as f:
-                w = csv.DictWriter(f, fieldnames=ln)
-                output = {'Location':str(p.point)}
-                w.writerow(output)
+        if p.point.x<min:
+            min = p.point.x
+    global big_dist
+    print(min)
+    big_dist = True if min>=4 else False
+            
 
 
         

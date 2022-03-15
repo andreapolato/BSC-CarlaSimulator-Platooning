@@ -116,7 +116,16 @@ def manage_follower(snap):
                 
             else:
                 n+=1
-                        
+
+def get_points(points):
+    for p in points:
+        if p.point.z>-0.7:
+            with open(dir + '/lidar_data_follower.csv', 'a+', newline='') as f:
+                w = csv.DictWriter(f, fieldnames=ln)
+                output = {'Location':str(p.point)}
+                w.writerow(output)
+
+
         
 try:
     #----------------------------------------------
@@ -153,6 +162,14 @@ try:
     actor_list.append(PlatooningLeader)
     actor_list.append(PlatooningFollower)
 
+    spawn = carla.Transform(carla.Location(x=2.5, z=0.8))
+    lidar_bp = blueprint_library.find('sensor.lidar.ray_cast')
+    lidar_bp.set_attribute('horizontal_fov','90')
+    lidar_bp.set_attribute('upper_fov','5')
+    lidar_bp.set_attribute('lower_fov','-5')
+    LidarFollower = world.spawn_actor(lidar_bp, spawn, attach_to=PlatooningFollower)
+    actor_list.append(LidarFollower)
+
     dir = 'recs/' + time.strftime("%Y%m%d-%H%M%S")
     if not os.path.exists(dir):
         os.makedirs(dir)
@@ -169,8 +186,15 @@ try:
         print('Follower CSV file created.')
         w.writeheader()
 
+    with open(dir + '/lidar_data_follower.csv', 'w', newline='') as f:
+        ln = ['Location']
+        w = csv.DictWriter(f, fieldnames=ln)
+        print('Follower CSV file created.')
+        w.writeheader()
+
     last_snap=0
     world.on_tick(lambda snap: record_vehicle_data(snap))
+    LidarFollower.listen(lambda points: get_points(points))
     time.sleep(1)
     while True:
         if(snap_list):

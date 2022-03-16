@@ -3,6 +3,7 @@ from dis import dis
 import glob
 from multiprocessing.connection import wait
 import os
+from pyexpat import model
 import re
 import sys
 from PIL import Image
@@ -54,15 +55,17 @@ def extract_data(snap,vehicle):
     x = str("{0:10.3f}".format(transform.location.x))
     y = str("{0:10.3f}".format(transform.location.y))
     z = str("{0:10.3f}".format(transform.location.z))
+    ya = str(transform.rotation.yaw)
     vel = vehicle_snap.get_velocity()
     speed = str('%15.2f'%(3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)))
     throttle = str(vehicle.get_control().throttle)
     steer = str(vehicle.get_control().steer)
     brake = str(vehicle.get_control().brake)
-    with open(dir + '/vehicle_data_%s.csv'%('leader' if vehicle==PlatooningLeader else 'follower'), 'a+', newline='') as f:
-        w = csv.DictWriter(f, fieldnames=fn)
-        output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Km/h':speed, 'Throttle':throttle, 'Steer':steer, 'Brake':brake}
-        w.writerow(output)
+    if throttle != 0.0 and steer != 0.0 and brake != 0.0:
+        with open(dir + '/vehicle_data_%s.csv'%('leader' if vehicle==PlatooningLeader else 'follower'), 'a+', newline='') as f:
+            w = csv.DictWriter(f, fieldnames=fn)
+            output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Yaw':ya, 'Km/h':speed, 'Throttle':throttle, 'Steer':steer, 'Brake':brake}
+            w.writerow(output)
 
 def record_vehicle_data(snap):
     snap_list.append(snap)
@@ -71,20 +74,28 @@ def record_vehicle_data(snap):
             extract_data(snap,vehicle)
     #t,s,b = manage_follower(snap)
     
-def set_steer(fx,fy):
+def set_steer(fx,fy,yaw):
     with open(dir + '/vehicle_data_leader.csv', newline='') as f:
         r = csv.DictReader(f, fieldnames=fn)
+        rl = list(r)
         n=0
         s=0.0
-        for row in r:
-            if n!=0:
+        for row in reversed(rl):
+            if row!=rl[0]:
                 lx = float(row['X'])
                 ly = float(row['Y'])
-                if abs(lx-fx)<=2.0 and abs(ly-fy)<=2.0:
-                    s=float(row['Steer'])
+                lyaw = float(row['Yaw'])
+                if abs(lx-fx)<=0.5 and abs(ly-fy)<=0.5:
+                    if lyaw<-90 and yaw>90:
+                        s=float(row['Steer']) + (yaw-lyaw)/180
+                    else:
+                        s=float(row['Steer']) + (lyaw-yaw)/180
+                    if s>1.0:
+                        s=1.0
+                    elif s<-1.0:
+                        s=-1.0
+                    print(lyaw, yaw)
                     return s
-            else:
-                n+=1
         return s
 
 def manage_follower(snap):
@@ -92,6 +103,7 @@ def manage_follower(snap):
         r = csv.DictReader(f, fieldnames=fn)
         vehicle_snap = snap.find(PlatooningFollower.id)
         transform = vehicle_snap.get_transform()
+        yaw = float(transform.rotation.yaw)
         vel = vehicle_snap.get_velocity()
         fspeed = float('%15.2f'%(3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)))
         fx = float("{0:10.3f}".format(transform.location.x))
@@ -108,16 +120,16 @@ def manage_follower(snap):
                         if big_dist:
                             t = 1.0
                             b = 0.0
-                            s = set_steer(fx,fy)
+                            s = set_steer(fx,fy,yaw)
                         else:
                             t = delta/10+0.1 if delta/10+0.1 <= 1.0 else 1.0
                             b = 0.0
-                            s = set_steer(fx,fy)
+                            s = set_steer(fx,fy,yaw)
                         #PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
                     else:
                         t = 0.0
                         b = -delta/10 if -delta/10 <= 1.0 else 1.0
-                        s = set_steer(fx,fy)
+                        s = set_steer(fx,fy,yaw)
                     PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
             else:
                 n+=1
@@ -128,8 +140,7 @@ def get_points(points):
         if p.point.x<min:
             min = p.point.x
     global big_dist
-    print(min)
-    big_dist = True if min>=4 else False
+    big_dist = True if min>=2 else False
             
 
 
@@ -152,21 +163,44 @@ try:
         if isinstance(v, carla.Vehicle):
             v.destroy()
 
+    dir = 'recs/' + time.strftime("%Y%m%d-%H%M%S")
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+    with open(dir + '/vehicle_data_leader.csv', 'w', newline='') as f:
+        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Yaw', 'Km/h', 'Throttle', 'Steer', 'Brake']
+        w = csv.DictWriter(f, fieldnames=fn)
+        print('Leader CSV file created.')
+        w.writeheader()
+
+    with open(dir + '/vehicle_data_follower.csv', 'w', newline='') as f:
+        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Yaw', 'Km/h', 'Throttle', 'Steer', 'Brake']
+        w = csv.DictWriter(f, fieldnames=fn)
+        print('Follower CSV file created.')
+        w.writeheader()
+
+    with open(dir + '/lidar_data_follower.csv', 'w', newline='') as f:
+        ln = ['Location']
+        w = csv.DictWriter(f, fieldnames=ln)
+        print('Lidar CSV file created.')
+        w.writeheader()
+
+    world.on_tick(lambda snap: record_vehicle_data(snap))
     #------------------------------------
     #****** SPAWN TEST SUBJECT CAR ******
     #------------------------------------
     model3 = blueprint_library.filter('model3')[0]
-    audiTT = blueprint_library.filter('tt')[0]
 
     spawn = random.choice(world.get_map().get_spawn_points())
 
     PlatooningLeader = world.spawn_actor(model3, spawn)
     PlatooningLeader.set_autopilot(True)
+    actor_list.append(PlatooningLeader)
 
     time.sleep(2)
-    PlatooningFollower = world.spawn_actor(audiTT, spawn)
+    model3.set_attribute('color','255,0,0')
+    PlatooningFollower = world.spawn_actor(model3, spawn)
     PlatooningFollower.apply_control(carla.VehicleControl(throttle=1.0, steer=0.0, brake=0.0))
-    actor_list.append(PlatooningLeader)
     actor_list.append(PlatooningFollower)
 
     spawn = carla.Transform(carla.Location(x=2.5, z=0.8))
@@ -177,31 +211,14 @@ try:
     LidarFollower = world.spawn_actor(lidar_bp, spawn, attach_to=PlatooningFollower)
     actor_list.append(LidarFollower)
 
-    dir = 'recs/' + time.strftime("%Y%m%d-%H%M%S")
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    lanecrossing_bp = blueprint_library.find('sensor.other.lane_invasion')
+    LaneSensorFollower = world.spawn_actor(lanecrossing_bp, spawn, attach_to=PlatooningFollower)
+    actor_list.append(LaneSensorFollower)
 
-    with open(dir + '/vehicle_data_leader.csv', 'w', newline='') as f:
-        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Km/h', 'Throttle', 'Steer', 'Brake']
-        w = csv.DictWriter(f, fieldnames=fn)
-        print('Leader CSV file created.')
-        w.writeheader()
-
-    with open(dir + '/vehicle_data_follower.csv', 'w', newline='') as f:
-        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Km/h', 'Throttle', 'Steer', 'Brake']
-        w = csv.DictWriter(f, fieldnames=fn)
-        print('Follower CSV file created.')
-        w.writeheader()
-
-    with open(dir + '/lidar_data_follower.csv', 'w', newline='') as f:
-        ln = ['Location']
-        w = csv.DictWriter(f, fieldnames=ln)
-        print('Follower CSV file created.')
-        w.writeheader()
-
+    
     last_snap=0
-    world.on_tick(lambda snap: record_vehicle_data(snap))
     LidarFollower.listen(lambda points: get_points(points))
+    LaneSensorFollower.listen(lambda event: print(event.transform))
     time.sleep(1)
     while True:
         if(snap_list):

@@ -81,7 +81,7 @@ def record_vehicle_data(snap):
 def leader_going_straight():
     res = True
     for i in range (4):
-        if abs(yaw_list[i]-yaw_list[i+1])>0.05:
+        if abs(yaw_list[i]-yaw_list[i+1])>0.01:
             res = False
     return res
 
@@ -100,11 +100,11 @@ def set_steer(fx,fy,yaw):
                 lyaw = float(row['Yaw'])
                 if abs(lx-fx)<=(0.1 if leader_going_straight() else 0.6) and abs(ly-fy)<=(0.1 if leader_going_straight() else 0.6):
                     if lyaw<-90 and yaw>90:
-                        s=float(row['Steer']) + (lyaw-yaw+360)/135
+                        s=float(row['Steer']) + (lyaw-yaw+360)/180
                     elif lyaw>90 and yaw<-90:
-                        s=float(row['Steer']) + (lyaw-yaw-360)/135
+                        s=float(row['Steer']) + (lyaw-yaw-360)/180
                     else:
-                        s=float(row['Steer']) + (lyaw-yaw)/135
+                        s=float(row['Steer']) + (lyaw-yaw)/180
                     if s>1.0:
                         s=1.0
                     elif s<-1.0:
@@ -115,33 +115,58 @@ def set_steer(fx,fy,yaw):
                         best_x = lx
                         rel_y = ly
                         delta_x = abs(lx-fx)
+                        yaw_x = lyaw
                     if abs(ly-fy) < delta_y:
                         best_y = ly
                         rel_x = lx
                         delta_y = abs(ly-fy)
+                        yaw_y=lyaw
+                    lyaw = yaw_x if delta_x<delta_y else yaw_y
             n+=1
-            if n>=1000: break
+            if n>=500: break
+        #non basta controllare il leader, se sono in curva e lui in rettilineo c'è un problema di correzione perchè quando il leader va verso sinistra invalida le misure
         if leader_going_straight():
             sample = yaw_list[0]
-            if abs(sample)<5:
-                #check su x e fix y
-                print(rel_y, fy)    
-                s=(rel_y-fy)/20 + (sample-yaw)/180
-            elif abs(sample>175):
-                print(rel_y, fy)
-                if sample>90 and yaw<-90:
-                    s=(fy-rel_y)/20 + (sample-yaw-360)/180
-                if sample<-90 and yaw>90:
-                    s=(fy-rel_y)/20 + (sample-yaw+360)/180
-            elif sample<95 and sample>85:
-                #check su y e fix x
-                print(rel_x, fx)   
-                s=(fx-rel_x)/20 + (sample-yaw)/180
-            elif sample>-95 and sample<-85:
-                print(rel_x, fx)   
-                s=(rel_x-fx)/20 + (sample-yaw)/180
-        
+            if abs(sample)-abs(yaw)<=0.01:
+                print("STRAIGHT CORRECTION")
+                if abs(sample)<=45:
+                    #check su x e fix y
+                    s=(rel_y-fy)/20 + (sample-yaw)/180
+                elif abs(sample>=135):
+                    if sample>90 and yaw<-90:
+                        s=(fy-rel_y)/20 + (sample-yaw-360)/180
+                    if sample<-90 and yaw>90:
+                        s=(fy-rel_y)/20 + (sample-yaw+360)/180
+                elif sample<135 and sample>45:
+                    #check su y e fix x
+                    s=(fx-rel_x)/20 + (sample-yaw)/180
+                elif sample>-135 and sample<-45:
+                    s=(rel_x-fx)/20 + (sample-yaw)/180
+                return s
+                
+        print("GENERIC CORRECTION")
+        if yaw>-180 and yaw<=-90:
+            l_pos = -rel_y if delta_x<delta_y else rel_x
+            f_pos = fy if delta_x<delta_y else -fx
+        if yaw>-90 and yaw<=0:
+            l_pos = rel_y if delta_x<delta_y else rel_x
+            f_pos = -fy if delta_x<delta_y else -fx
+        if yaw>0 and yaw<=90:
+            l_pos = rel_y if delta_x<delta_y else -rel_x
+            f_pos = -fy if delta_x<delta_y else fx
+        if yaw>90 and yaw<=180:
+            l_pos = -rel_y if delta_x<delta_y else -rel_x
+            f_pos = fy if delta_x<delta_y else fx
+        s = (l_pos+f_pos)/20
+        print(s)
+        if lyaw>90 and yaw<-90:
+            s+=(lyaw-yaw-360)/180
+        elif lyaw<-90 and yaw>90:
+            s+=(lyaw-yaw+360)/180
+        else:
+            s+=(lyaw-yaw)/180
         return s
+
 
 def manage_follower(snap):
     with open(dir + '/vehicle_data_leader.csv', newline='') as f:

@@ -98,13 +98,13 @@ def set_steer(fx,fy,yaw):
                 lx = float(row['X'])
                 ly = float(row['Y'])
                 lyaw = float(row['Yaw'])
-                if abs(lx-fx)<=0.3 and abs(ly-fy)<=0.3:
+                if abs(lx-fx)<=(0.1 if leader_going_straight() else 0.6) and abs(ly-fy)<=(0.1 if leader_going_straight() else 0.6):
                     if lyaw<-90 and yaw>90:
-                        s=float(row['Steer']) + (lyaw-yaw+360)/90
+                        s=float(row['Steer']) + (lyaw-yaw+360)/135
                     elif lyaw>90 and yaw<-90:
-                        s=float(row['Steer']) + (lyaw-yaw-360)/90
+                        s=float(row['Steer']) + (lyaw-yaw-360)/135
                     else:
-                        s=float(row['Steer']) + (lyaw-yaw)/90
+                        s=float(row['Steer']) + (lyaw-yaw)/135
                     if s>1.0:
                         s=1.0
                     elif s<-1.0:
@@ -126,17 +126,20 @@ def set_steer(fx,fy,yaw):
             if abs(sample)<5:
                 #check su x e fix y
                 print(rel_y, fy)    
-                s=(rel_y-fy)/20
+                s=(rel_y-fy)/20 + (sample-yaw)/180
             elif abs(sample>175):
-                print(rel_y, fy)    
-                s=(fy-rel_y)/20
+                print(rel_y, fy)
+                if sample>90 and yaw<-90:
+                    s=(fy-rel_y)/20 + (sample-yaw-360)/180
+                if sample<-90 and yaw>90:
+                    s=(fy-rel_y)/20 + (sample-yaw+360)/180
             elif sample<95 and sample>85:
                 #check su y e fix x
                 print(rel_x, fx)   
-                s=(fx-rel_x)/20
+                s=(fx-rel_x)/20 + (sample-yaw)/180
             elif sample>-95 and sample<-85:
                 print(rel_x, fx)   
-                s=(rel_x-fx)/20
+                s=(rel_x-fx)/20 + (sample-yaw)/180
         
         return s
 
@@ -158,7 +161,7 @@ def manage_follower(snap):
                     lspeed = float(row['Km/h'])
                     delta = lspeed-fspeed
                     global big_dist
-                    if (delta>=0):
+                    if (delta>0):
                         if big_dist:
                             t = 0.8
                             b = 0.0
@@ -168,6 +171,8 @@ def manage_follower(snap):
                             b = 0.0
                             s = set_steer(fx,fy,yaw)
                         #PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
+                    elif delta==0:
+                        b=1.0
                     else:
                         if not big_dist:
                             t = 0.0
@@ -193,9 +198,6 @@ def get_points(points):
 
         
 try:
-    #----------------------------------------------
-    #****** CONNECT TO THE SIMULATION SERVER ******
-    #----------------------------------------------
     client = carla.Client('localhost', 2000)
     client.set_timeout(5.0)
     

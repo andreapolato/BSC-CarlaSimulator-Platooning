@@ -34,6 +34,7 @@ IMG_HEIGHT = 720
 
 actor_list = []
 snap_list = []
+yaw_list = [0,0,0,0,0]
 big_dist = True
 
 def convert_time(seconds):
@@ -66,6 +67,9 @@ def extract_data(snap,vehicle):
             w = csv.DictWriter(f, fieldnames=fn)
             output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Yaw':ya, 'Km/h':speed, 'Throttle':throttle, 'Steer':steer, 'Brake':brake}
             w.writerow(output)
+    if vehicle==PlatooningLeader:
+        yaw_list.append(float(ya))
+        yaw_list.pop(0)
 
 def record_vehicle_data(snap):
     snap_list.append(snap)
@@ -74,28 +78,66 @@ def record_vehicle_data(snap):
             extract_data(snap,vehicle)
     #t,s,b = manage_follower(snap)
     
+def leader_going_straight():
+    res = True
+    for i in range (4):
+        if abs(yaw_list[i]-yaw_list[i+1])>0.05:
+            res = False
+    return res
+
 def set_steer(fx,fy,yaw):
     with open(dir + '/vehicle_data_leader.csv', newline='') as f:
         r = csv.DictReader(f, fieldnames=fn)
         rl = list(r)
         n=0
         s=0.0
+        delta_x = delta_y = 360
+        best_x = best_y = rel_x = rel_y = 0
         for row in reversed(rl):
             if row!=rl[0]:
                 lx = float(row['X'])
                 ly = float(row['Y'])
                 lyaw = float(row['Yaw'])
-                if abs(lx-fx)<=0.5 and abs(ly-fy)<=0.5:
+                if abs(lx-fx)<=0.3 and abs(ly-fy)<=0.3:
                     if lyaw<-90 and yaw>90:
-                        s=float(row['Steer']) + (yaw-lyaw)/180
+                        s=float(row['Steer']) + (lyaw-yaw+360)/90
+                    elif lyaw>90 and yaw<-90:
+                        s=float(row['Steer']) + (lyaw-yaw-360)/90
                     else:
-                        s=float(row['Steer']) + (lyaw-yaw)/180
+                        s=float(row['Steer']) + (lyaw-yaw)/90
                     if s>1.0:
                         s=1.0
                     elif s<-1.0:
                         s=-1.0
-                    print(lyaw, yaw)
                     return s
+                else:
+                    if abs(lx-fx) < delta_x:
+                        best_x = lx
+                        rel_y = ly
+                        delta_x = abs(lx-fx)
+                    if abs(ly-fy) < delta_y:
+                        best_y = ly
+                        rel_x = lx
+                        delta_y = abs(ly-fy)
+            n+=1
+            if n>=1000: break
+        if leader_going_straight():
+            sample = yaw_list[0]
+            if abs(sample)<5:
+                #check su x e fix y
+                print(rel_y, fy)    
+                s=(rel_y-fy)/20
+            elif abs(sample>175):
+                print(rel_y, fy)    
+                s=(fy-rel_y)/20
+            elif sample<95 and sample>85:
+                #check su y e fix x
+                print(rel_x, fx)   
+                s=(fx-rel_x)/20
+            elif sample>-95 and sample<-85:
+                print(rel_x, fx)   
+                s=(rel_x-fx)/20
+        
         return s
 
 def manage_follower(snap):
@@ -118,18 +160,23 @@ def manage_follower(snap):
                     global big_dist
                     if (delta>=0):
                         if big_dist:
-                            t = 1.0
+                            t = 0.8
                             b = 0.0
                             s = set_steer(fx,fy,yaw)
                         else:
-                            t = delta/10+0.1 if delta/10+0.1 <= 1.0 else 1.0
+                            t = delta/10 if delta/10 <= 1.0 else 1.0
                             b = 0.0
                             s = set_steer(fx,fy,yaw)
                         #PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
                     else:
-                        t = 0.0
-                        b = -delta/10 if -delta/10 <= 1.0 else 1.0
-                        s = set_steer(fx,fy,yaw)
+                        if not big_dist:
+                            t = 0.0
+                            b = 0.8
+                            s = set_steer(fx,fy,yaw)
+                        else:
+                            t = 0.0
+                            b = -delta/10 if -delta/10 <= 1.0 else 1.0
+                            s = set_steer(fx,fy,yaw)
                     PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
             else:
                 n+=1

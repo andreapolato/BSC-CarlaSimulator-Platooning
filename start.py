@@ -36,6 +36,7 @@ actor_list = []
 snap_list = []
 yaw_list = [0,0,0,0,0]
 big_dist = True
+stop_output=False
 
 def convert_time(seconds):
     seconds = seconds%(24*3600)
@@ -47,6 +48,7 @@ def convert_time(seconds):
     return "%d:%02d:%02d:%04d"%(hrs,mins,seconds,mill)
 
 def extract_data(snap,vehicle):
+    global stop_output
     vehicle_snap = snap.find(vehicle.id)
     transform = vehicle_snap.get_transform()
     frame = str(snap.frame)
@@ -62,7 +64,9 @@ def extract_data(snap,vehicle):
     throttle = str(vehicle.get_control().throttle)
     steer = str(vehicle.get_control().steer)
     brake = str(vehicle.get_control().brake)
-    if throttle != 0.0 and steer != 0.0 and brake != 0.0:
+    if vehicle==PlatooningLeader and float(speed)!=0.0:
+        stop_output=False
+    if not stop_output:
         with open(dir + '/vehicle_data_%s.csv'%('leader' if vehicle==PlatooningLeader else 'follower'), 'a+', newline='') as f:
             w = csv.DictWriter(f, fieldnames=fn)
             output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Yaw':ya, 'Km/h':speed, 'Throttle':throttle, 'Steer':steer, 'Brake':brake}
@@ -70,6 +74,8 @@ def extract_data(snap,vehicle):
     if vehicle==PlatooningLeader:
         yaw_list.append(float(ya))
         yaw_list.pop(0)
+        if float(speed)==0.0:
+            stop_output=True
 
 def record_vehicle_data(snap):
     snap_list.append(snap)
@@ -93,12 +99,15 @@ def set_steer(fx,fy,yaw):
         s=0.0
         delta_x = delta_y = 360
         best_x = best_y = rel_x = rel_y = 0
+        follower_going_straight = abs(yaw)<2 or abs(yaw)>178 or (abs(yaw)<92 and abs(yaw)>88)
         for row in reversed(rl):
             if row!=rl[0]:
                 lx = float(row['X'])
                 ly = float(row['Y'])
                 lyaw = float(row['Yaw'])
-                if abs(lx-fx)<=(0.1 if leader_going_straight() else 0.6) and abs(ly-fy)<=(0.1 if leader_going_straight() else 0.6):
+                sample = yaw_list[0]
+                thresh = (0.1 if leader_going_straight and follower_going_straight else 0.5)
+                if abs(lx-fx)<= thresh and abs(ly-fy)<= thresh:
                     if lyaw<-90 and yaw>90:
                         s=float(row['Steer']) + (lyaw-yaw+360)/180
                     elif lyaw>90 and yaw<-90:
@@ -112,12 +121,10 @@ def set_steer(fx,fy,yaw):
                     return s
                 else:
                     if abs(lx-fx) < delta_x:
-                        best_x = lx
                         rel_y = ly
                         delta_x = abs(lx-fx)
                         yaw_x = lyaw
                     if abs(ly-fy) < delta_y:
-                        best_y = ly
                         rel_x = lx
                         delta_y = abs(ly-fy)
                         yaw_y=lyaw
@@ -125,46 +132,66 @@ def set_steer(fx,fy,yaw):
             n+=1
             if n>=500: break
         #non basta controllare il leader, se sono in curva e lui in rettilineo c'è un problema di correzione perchè quando il leader va verso sinistra invalida le misure
-        if leader_going_straight():
+        if leader_going_straight() and follower_going_straight:
             sample = yaw_list[0]
-            if abs(sample)-abs(yaw)<=0.01:
-                print("STRAIGHT CORRECTION")
-                if abs(sample)<=45:
-                    #check su x e fix y
-                    s=(rel_y-fy)/20 + (sample-yaw)/180
-                elif abs(sample>=135):
-                    if sample>90 and yaw<-90:
-                        s=(fy-rel_y)/20 + (sample-yaw-360)/180
-                    if sample<-90 and yaw>90:
-                        s=(fy-rel_y)/20 + (sample-yaw+360)/180
-                elif sample<135 and sample>45:
-                    #check su y e fix x
-                    s=(fx-rel_x)/20 + (sample-yaw)/180
-                elif sample>-135 and sample<-45:
-                    s=(rel_x-fx)/20 + (sample-yaw)/180
-                return s
+            print("STRAIGHT CORRECTION")
+            if abs(sample)<=45 and abs(yaw)<=45:
+                #check su x e fix y
+                s=(rel_y-fy)/20 + (sample-yaw)/180
+                print("RIGHT")
+            elif abs(sample)>=135 and abs(yaw)>=135:
+                if sample>90 and yaw<-90:
+                    s=(fy-rel_y)/20 + (sample-yaw-360)/180
+                elif sample<-90 and yaw>90:
+                    s=(fy-rel_y)/20 + (sample-yaw+360)/180
+                else:
+                    s=(fy-rel_y)/20 + (sample-yaw)/180
+                print("LEFT")
+            elif sample<135 and sample>45 and yaw<135 and yaw>45:
+                #check su y e fix x
+                s=(fx-rel_x)/20 + (sample-yaw)/180
+                print("DOWN")
+            elif sample>-135 and sample<-45 and yaw>-135 and yaw<-45:
+                s=(rel_x-fx)/20 + (sample-yaw)/180
+                print("UP")
+            else:
+                print(sample, yaw)
+            print(s)
+            if s>1.0:
+                s=1.0
+            elif s<-1.0:
+                s=-1.0
+            return s
                 
-        print("GENERIC CORRECTION")
+        print("GENERIC CORRECTION", leader_going_straight(), follower_going_straight)
+        #AGGIUNGWERE CHECK SU ANGOLO DEL LEADER
         if yaw>-180 and yaw<=-90:
             l_pos = -rel_y if delta_x<delta_y else rel_x
             f_pos = fy if delta_x<delta_y else -fx
-        if yaw>-90 and yaw<=0:
+        elif yaw>-90 and yaw<=0:
             l_pos = rel_y if delta_x<delta_y else rel_x
             f_pos = -fy if delta_x<delta_y else -fx
-        if yaw>0 and yaw<=90:
+        elif yaw>0 and yaw<=90:
             l_pos = rel_y if delta_x<delta_y else -rel_x
             f_pos = -fy if delta_x<delta_y else fx
-        if yaw>90 and yaw<=180:
+        elif yaw>90 and yaw<=180:
             l_pos = -rel_y if delta_x<delta_y else -rel_x
             f_pos = fy if delta_x<delta_y else fx
-        s = (l_pos+f_pos)/20
-        print(s)
+        s = (l_pos+f_pos)/40
+        print("base:",s)
+        print("lyaw:",lyaw)
+        print("fyaw:",yaw)
         if lyaw>90 and yaw<-90:
-            s+=(lyaw-yaw-360)/180
+            s+=(lyaw-yaw-360)/90
         elif lyaw<-90 and yaw>90:
-            s+=(lyaw-yaw+360)/180
+            s+=(lyaw-yaw+360)/90
         else:
-            s+=(lyaw-yaw)/180
+            s+=(lyaw-yaw)/90
+        print("corrected:",s)
+        if s>1.0:
+            s=1.0
+        elif s<-1.0:
+            s=-1.0
         return s
 
 
@@ -180,36 +207,30 @@ def manage_follower(snap):
         fy = float("{0:10.3f}".format(transform.location.y))
         n=0
         t=s=b=0
-        for row in r:
-            if n!=0:
+        rl = list(r)
+        for row in reversed(rl):
+            if row!=rl[0]:
                 if row['Snap'] == str(snap.frame):
                     lspeed = float(row['Km/h'])
                     delta = lspeed-fspeed
                     global big_dist
                     if (delta>0):
+                        b = 0.0
+                        s = set_steer(fx,fy,yaw)
                         if big_dist:
                             t = 0.8
-                            b = 0.0
-                            s = set_steer(fx,fy,yaw)
                         else:
                             t = delta/10 if delta/10 <= 1.0 else 1.0
-                            b = 0.0
-                            s = set_steer(fx,fy,yaw)
-                        #PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
                     elif delta==0:
                         b=1.0
                     else:
+                        t=0.0
+                        s = set_steer(fx,fy,yaw)
                         if not big_dist:
-                            t = 0.0
                             b = 0.8
-                            s = set_steer(fx,fy,yaw)
                         else:
-                            t = 0.0
                             b = -delta/10 if -delta/10 <= 1.0 else 1.0
-                            s = set_steer(fx,fy,yaw)
                     PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
-            else:
-                n+=1
 
 def get_points(points):
     min = 500

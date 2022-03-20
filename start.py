@@ -99,7 +99,7 @@ def set_steer(fx,fy,yaw):
         s=0.0
         delta_x = delta_y = 360
         best_x = best_y = rel_x = rel_y = 0
-        follower_going_straight = abs(yaw)<2 or abs(yaw)>178 or (abs(yaw)<92 and abs(yaw)>88)
+        follower_going_straight = abs(yaw)<3 or abs(yaw)>177 or (abs(yaw)<93 and abs(yaw)>87)
         for row in reversed(rl):
             if row!=rl[0]:
                 lx = float(row['X'])
@@ -108,12 +108,17 @@ def set_steer(fx,fy,yaw):
                 sample = yaw_list[0]
                 thresh = (0.1 if leader_going_straight and follower_going_straight else 0.5)
                 if abs(lx-fx)<= thresh and abs(ly-fy)<= thresh:
+                    print("FOLLOWING")
+                    s=float(row['Steer'])
                     if lyaw<-90 and yaw>90:
-                        s=float(row['Steer']) + (lyaw-yaw+360)/180
+                        print((lyaw-yaw+360)/180)
+                        s+=(lyaw-yaw+360)/180
                     elif lyaw>90 and yaw<-90:
-                        s=float(row['Steer']) + (lyaw-yaw-360)/180
+                        print((lyaw-yaw-360)/180)
+                        s+=(lyaw-yaw-360)/180
                     else:
-                        s=float(row['Steer']) + (lyaw-yaw)/180
+                        print((lyaw-yaw)/180)
+                        s+=(lyaw-yaw)/180
                     if s>1.0:
                         s=1.0
                     elif s<-1.0:
@@ -177,7 +182,7 @@ def set_steer(fx,fy,yaw):
         elif yaw>90 and yaw<=180:
             l_pos = -rel_y if delta_x<delta_y else -rel_x
             f_pos = fy if delta_x<delta_y else fx
-        s = (l_pos+f_pos)/40
+        s = (l_pos+f_pos)/60
         print("base:",s)
         print("lyaw:",lyaw)
         print("fyaw:",yaw)
@@ -295,7 +300,6 @@ try:
     time.sleep(2)
     model3.set_attribute('color','255,0,0')
     PlatooningFollower = world.spawn_actor(model3, spawn)
-    PlatooningFollower.apply_control(carla.VehicleControl(throttle=1.0, steer=0.0, brake=0.0))
     actor_list.append(PlatooningFollower)
 
     spawn = carla.Transform(carla.Location(x=2.5, z=0.8))
@@ -314,6 +318,14 @@ try:
     last_snap=0
     LidarFollower.listen(lambda points: get_points(points))
     LaneSensorFollower.listen(lambda event: print(event.transform))
+    
+    trans = PlatooningFollower.get_transform()
+    trans.location.z = 100
+    trans.rotation.pitch=-90
+    trans.rotation.yaw=0
+    trans.rotation.roll=0
+    world.get_spectator().set_transform(trans)
+
     time.sleep(1)
     while True:
         if(snap_list):

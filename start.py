@@ -6,6 +6,7 @@ import os
 from pyexpat import model
 import re
 import sys
+from tabnanny import check
 from PIL import Image
 
 try:
@@ -34,9 +35,10 @@ IMG_HEIGHT = 720
 
 actor_list = []
 snap_list = []
-yaw_list = [0,0,0,0,0]
+leader_yaw_list = [0,0,0,0,0]
+follower_yaw_list = [0,0,0,0,0]
 big_dist = True
-stop_output=False
+stop_output = False
 
 def convert_time(seconds):
     seconds = seconds%(24*3600)
@@ -64,30 +66,33 @@ def extract_data(snap,vehicle):
     throttle = str(vehicle.get_control().throttle)
     steer = str(vehicle.get_control().steer)
     brake = str(vehicle.get_control().brake)
-    if vehicle==PlatooningLeader and float(speed)!=0.0:
-        stop_output=False
-    if not stop_output:
-        with open(dir + '/vehicle_data_%s.csv'%('leader' if vehicle==PlatooningLeader else 'follower'), 'a+', newline='') as f:
-            w = csv.DictWriter(f, fieldnames=fn)
-            output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Yaw':ya, 'Km/h':speed, 'Throttle':throttle, 'Steer':steer, 'Brake':brake}
-            w.writerow(output)
     if vehicle==PlatooningLeader:
-        yaw_list.append(float(ya))
-        yaw_list.pop(0)
-        if float(speed)==0.0:
-            stop_output=True
+        leader_yaw_list.append(float(ya))
+        leader_yaw_list.pop(0)
+    with open(dir + '/vehicle_data_%s.csv'%('leader' if vehicle==PlatooningLeader else 'follower'), 'a+', newline='') as f:
+        w = csv.DictWriter(f, fieldnames=fn)
+        output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Yaw':ya, 'Km/h':speed, 'Throttle':throttle, 'Steer':steer, 'Brake':brake}
+        w.writerow(output)
 
 def record_vehicle_data(snap):
     snap_list.append(snap)
+    if len(snap_list)>1:
+        snap_list.pop(0)
     for vehicle in actor_list:
         if isinstance(vehicle, carla.Vehicle):
             extract_data(snap,vehicle)
-    #t,s,b = manage_follower(snap)
     
 def leader_going_straight():
     res = True
     for i in range (4):
-        if abs(yaw_list[i]-yaw_list[i+1])>0.01:
+        if abs(leader_yaw_list[i]-leader_yaw_list[i+1])>0.01:
+            res = False
+    return res
+
+def follower_going_straight():
+    res = True
+    for i in range (4):
+        if abs(follower_yaw_list[i]-follower_yaw_list[i+1])>0.01:
             res = False
     return res
 
@@ -99,25 +104,22 @@ def set_steer(fx,fy,yaw):
         s=0.0
         delta_x = delta_y = 360
         best_x = best_y = rel_x = rel_y = 0
-        follower_going_straight = abs(yaw)<3 or abs(yaw)>177 or (abs(yaw)<93 and abs(yaw)>87)
         for row in reversed(rl):
             if row!=rl[0]:
                 lx = float(row['X'])
                 ly = float(row['Y'])
                 lyaw = float(row['Yaw'])
-                sample = yaw_list[0]
-                thresh = (0.1 if leader_going_straight and follower_going_straight else 0.5)
-                if abs(lx-fx)<= thresh and abs(ly-fy)<= thresh:
-                    print("FOLLOWING")
+                if abs(lx-fx)<= 0.1 and abs(ly-fy)<= 0.1:
+                    #print("FOLLOWING")
                     s=float(row['Steer'])
                     if lyaw<-90 and yaw>90:
-                        print((lyaw-yaw+360)/180)
+                        #print((lyaw-yaw+360)/180)
                         s+=(lyaw-yaw+360)/180
                     elif lyaw>90 and yaw<-90:
-                        print((lyaw-yaw-360)/180)
+                        #print((lyaw-yaw-360)/180)
                         s+=(lyaw-yaw-360)/180
                     else:
-                        print((lyaw-yaw)/180)
+                        #print((lyaw-yaw)/180)
                         s+=(lyaw-yaw)/180
                     if s>1.0:
                         s=1.0
@@ -134,42 +136,44 @@ def set_steer(fx,fy,yaw):
                         delta_y = abs(ly-fy)
                         yaw_y=lyaw
                     lyaw = yaw_x if delta_x<delta_y else yaw_y
-            n+=1
+            if float(row['Km/h'])>0.03: n+=1
             if n>=500: break
-        #non basta controllare il leader, se sono in curva e lui in rettilineo c'è un problema di correzione perchè quando il leader va verso sinistra invalida le misure
-        if leader_going_straight() and follower_going_straight:
-            sample = yaw_list[0]
-            print("STRAIGHT CORRECTION")
-            if abs(sample)<=45 and abs(yaw)<=45:
-                #check su x e fix y
-                s=(rel_y-fy)/20 + (sample-yaw)/180
-                print("RIGHT")
-            elif abs(sample)>=135 and abs(yaw)>=135:
-                if sample>90 and yaw<-90:
-                    s=(fy-rel_y)/20 + (sample-yaw-360)/180
-                elif sample<-90 and yaw>90:
-                    s=(fy-rel_y)/20 + (sample-yaw+360)/180
+        
+        print(leader_going_straight(), follower_going_straight())
+        if leader_going_straight() and follower_going_straight():
+            sample = leader_yaw_list[0]
+            print("STRAIGHT", abs(sample-yaw))
+            if abs(sample-yaw)<3:
+                #print("STRAIGHT CORRECTION")
+                if abs(sample)<=45 and abs(yaw)<=45:
+                    s=(rel_y-fy)/20 + (sample-yaw)/180
+                    #print("RIGHT")
+                elif abs(sample)>=135 and abs(yaw)>=135:
+                    if sample>90 and yaw<-90:
+                        s=(fy-rel_y)/20 + (sample-yaw-360)/180
+                    elif sample<-90 and yaw>90:
+                        s=(fy-rel_y)/20 + (sample-yaw+360)/180
+                    else:
+                        s=(fy-rel_y)/20 + (sample-yaw)/180
+                    #print("LEFT")
+                elif sample<135 and sample>45 and yaw<135 and yaw>45:
+                    s=(fx-rel_x)/20 + (sample-yaw)/180
+                    #print("DOWN")
+                elif sample>-135 and sample<-45 and yaw>-135 and yaw<-45:
+                    s=(rel_x-fx)/20 + (sample-yaw)/180
+                    #print("UP")
                 else:
-                    s=(fy-rel_y)/20 + (sample-yaw)/180
-                print("LEFT")
-            elif sample<135 and sample>45 and yaw<135 and yaw>45:
-                #check su y e fix x
-                s=(fx-rel_x)/20 + (sample-yaw)/180
-                print("DOWN")
-            elif sample>-135 and sample<-45 and yaw>-135 and yaw<-45:
-                s=(rel_x-fx)/20 + (sample-yaw)/180
-                print("UP")
-            else:
-                print(sample, yaw)
-            print(s)
-            if s>1.0:
-                s=1.0
-            elif s<-1.0:
-                s=-1.0
-            return s
+                    print("UNKNOWN BEHAVIOUR",sample, yaw)
+                #print(s)
+                if s>1.0:
+                    s=1.0
+                elif s<-1.0:
+                    s=-1.0
+                print("Straigth correction",s,sample,yaw)
+                return s
                 
-        print("GENERIC CORRECTION", leader_going_straight(), follower_going_straight)
-        #AGGIUNGWERE CHECK SU ANGOLO DEL LEADER
+        #print("GENERIC CORRECTION", leader_going_straight(), follower_going_straight)
+        #AGGIUNGWERE CHECK SU ANGOLO DEL LEADER?
         if yaw>-180 and yaw<=-90:
             l_pos = -rel_y if delta_x<delta_y else rel_x
             f_pos = fy if delta_x<delta_y else -fx
@@ -183,20 +187,21 @@ def set_steer(fx,fy,yaw):
             l_pos = -rel_y if delta_x<delta_y else -rel_x
             f_pos = fy if delta_x<delta_y else fx
         s = (l_pos+f_pos)/60
-        print("base:",s)
-        print("lyaw:",lyaw)
-        print("fyaw:",yaw)
+        #print("base:",s)
+        #print("lyaw:",lyaw)
+        #print("fyaw:",yaw)
         if lyaw>90 and yaw<-90:
-            s+=(lyaw-yaw-360)/90
+            s+=(lyaw-yaw-360)/45
         elif lyaw<-90 and yaw>90:
-            s+=(lyaw-yaw+360)/90
+            s+=(lyaw-yaw+360)/45
         else:
-            s+=(lyaw-yaw)/90
-        print("corrected:",s)
+            s+=(lyaw-yaw)/45
+        #print("corrected:",s)
         if s>1.0:
             s=1.0
         elif s<-1.0:
             s=-1.0
+        if abs(s)>0.1: print("Generic correction",s,l_pos,f_pos)
         return s
 
 
@@ -206,11 +211,12 @@ def manage_follower(snap):
         vehicle_snap = snap.find(PlatooningFollower.id)
         transform = vehicle_snap.get_transform()
         yaw = float(transform.rotation.yaw)
+        follower_yaw_list.append(yaw)
+        follower_yaw_list.pop(0)
         vel = vehicle_snap.get_velocity()
         fspeed = float('%15.2f'%(3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)))
         fx = float("{0:10.3f}".format(transform.location.x))
         fy = float("{0:10.3f}".format(transform.location.y))
-        n=0
         t=s=b=0
         rl = list(r)
         for row in reversed(rl):
@@ -219,23 +225,31 @@ def manage_follower(snap):
                     lspeed = float(row['Km/h'])
                     delta = lspeed-fspeed
                     global big_dist
-                    if (delta>0):
-                        b = 0.0
+                    if lspeed>0.03:
+                        s = set_steer(fx,fy,yaw)
+                        if (delta>=0):
+                            t = delta/10 if delta/10 <= 1.0 else 1.0
+                            if big_dist:
+                                t += 0.2
+                        else:
+                            s = set_steer(fx,fy,yaw)
+                            b = -delta/10 if -delta/10 <= 1.0 else 1.0
+                            if not big_dist:
+                                b += 0.2
+                    else:
                         s = set_steer(fx,fy,yaw)
                         if big_dist:
-                            t = 0.8
+                            t = 0.2
                         else:
-                            t = delta/10 if delta/10 <= 1.0 else 1.0
-                    elif delta==0:
-                        b=1.0
-                    else:
-                        t=0.0
-                        s = set_steer(fx,fy,yaw)
-                        if not big_dist:
                             b = 0.8
-                        else:
-                            b = -delta/10 if -delta/10 <= 1.0 else 1.0
                     PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
+
+def check_distance():
+    global big_dist
+    follower_pos = PlatooningFollower.get_transform()
+    leader_pos = PlatooningLeader.get_transform()
+    dist = abs(((follower_pos.location.x-leader_pos.location.x)**2 + (follower_pos.location.y-leader_pos.location.y)**2)**(1/2))
+    big_dist = dist>12.0
 
 def get_points(points):
     min = 500
@@ -243,7 +257,7 @@ def get_points(points):
         if p.point.x<min:
             min = p.point.x
     global big_dist
-    big_dist = True if min>=2 else False
+    #big_dist = True if min>=2 else False
             
 
 
@@ -253,6 +267,7 @@ try:
     client.set_timeout(5.0)
     
     world = client.get_world()
+    #world = client.load_world('Town01')
     settings = world.get_settings()
     settings.fixed_delta_seconds = 0.01
     world.apply_settings(settings)
@@ -286,9 +301,6 @@ try:
         w.writeheader()
 
     world.on_tick(lambda snap: record_vehicle_data(snap))
-    #------------------------------------
-    #****** SPAWN TEST SUBJECT CAR ******
-    #------------------------------------
     model3 = blueprint_library.filter('model3')[0]
 
     spawn = random.choice(world.get_map().get_spawn_points())
@@ -330,6 +342,7 @@ try:
     while True:
         if(snap_list):
             manage_follower(snap_list[-1])
+            check_distance()
         
 except KeyboardInterrupt:
     pass

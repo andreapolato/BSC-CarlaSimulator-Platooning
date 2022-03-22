@@ -38,7 +38,6 @@ snap_list = []
 leader_yaw_list = [0,0,0,0,0]
 follower_yaw_list = [0,0,0,0,0]
 big_dist = True
-stop_output = False
 
 def convert_time(seconds):
     seconds = seconds%(24*3600)
@@ -50,7 +49,6 @@ def convert_time(seconds):
     return "%d:%02d:%02d:%04d"%(hrs,mins,seconds,mill)
 
 def extract_data(snap,vehicle):
-    global stop_output
     vehicle_snap = snap.find(vehicle.id)
     transform = vehicle_snap.get_transform()
     frame = str(snap.frame)

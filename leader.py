@@ -2,6 +2,10 @@ import carla
 import math
 import numpy as np
 
+def sign(number):
+  if number>=0: return 1
+  else: return -1
+
 class PlatoonMember:
     
     def __init__(self, vehicle: carla.Vehicle):
@@ -51,7 +55,7 @@ class Leader(PlatoonMember):
     def update_follower(self):
         for follower in self.followers:
             if self.speed>0.03:
-                follower.addWaypoint([self.x, self.y, self.steer])
+                follower.addWaypoint([self.x, self.y, self.yaw, self.steer])
                 follower.setSpeedGoal(self.speed)
 
 class Follower(PlatoonMember):
@@ -76,9 +80,9 @@ class Follower(PlatoonMember):
         delta = self.speedGoal - self.speed
         t = b = 0.0
         if self.speedGoal>0.04:
-            if (delta>0.03):
+            if (delta>0):
                 boost = 0.2 if self.big_dist else 0.0
-                t = delta/10 + boost if delta/10 + boost <= 1.0 else 1.0
+                t = (delta/10 + boost) if (delta/10 + boost) <= 1.0 else 1.0
             else:
                 t = self.last_t
                 if not self.big_dist:
@@ -91,37 +95,143 @@ class Follower(PlatoonMember):
         self.last_t=t
         return t, b
 
-    def defineSteer(self, tx, ty):
+    def defineSteer(self):
+        rl = self.waypoints
+        fx = self.x
+        fy = self.y
+        yaw = self.yaw
+        n=0
+        limit=1000
         s=0.0
-
-        if self.speed>0.03:
-            x = self.x
-            y = self.y
-            yaw = self.yaw
-            ip = ((x-tx)**2 + (y-ty)**2)**(1/2)
-
-            cat = abs(x-tx)
-            alpha = np.degrees(np.arccos(cat/ip))
+        delta_x = delta_y = 360
+        rel_x = rel_y = 0
+        for row in reversed(rl):
             
-            if abs(tx-x)<0.5 or abs(ty-y)<0.5:
-                alpha = self.yaw
-
-            elif tx<x:
-                alpha=180-alpha
-            elif ty<=y:
-                alpha = -alpha
+            lx = row[0]
+            ly = row[1]
+            lyaw = row[2]
+            toll = 0.1
+            if abs(lx-fx)<= toll and abs(ly-fy)<= toll:
+                s=row[3]
+                if lyaw<-90 and yaw>90:
+                    corr=(lyaw-yaw+360)/60
+                elif lyaw>90 and yaw<-90:
+                    corr=(lyaw-yaw-360)/60
+                else:
+                    corr=(lyaw-yaw)/60
+                if corr > 1.0: corr = 1.0
+                elif corr < -1.0: corr = -1.0
+                s+=corr
+                if s>1.0:
+                    s=1.0
+                elif s<-1.0:
+                    s=-1.0
+                return s
             
-            if alpha<-90 and yaw>90:
-                s=(alpha-yaw+360)/60
-            elif alpha>90 and yaw<-90:
-                s=(alpha-yaw-360)/60
             else:
-                s=(alpha-yaw)/60
+                if abs(lx-fx) < delta_x:
+                    rel_y = ly
+                    delta_x = abs(lx-fx)
+                    yaw_x = lyaw
+                if abs(ly-fy) < delta_y:
+                    rel_x = lx
+                    delta_y = abs(ly-fy)
+                    yaw_y=lyaw
+                    
+        lyaw = yaw_x if delta_x<delta_y else yaw_y
+        #yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
+        #same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
+        
+        corr = (lyaw-yaw)/60
+
+        if abs(yaw)<=5: #going east
+            s=(rel_y-fy)/10
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
+        elif abs(yaw)>=175: #going ovest
+            if lyaw>90 and yaw<-90:
+                corr-=4
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            elif lyaw<-90 and yaw>90:
+                corr+=4
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            else:
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+
+        elif yaw<95 and yaw>85: #going south
+            s=(fx-rel_x)/10
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
             
-            if s > 1.0: s = 1.0
-            elif s < -1.0: s = -1.0
+        elif yaw>-95 and yaw<-85: #going north
+            s=(rel_x-fx)/10 
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
+
+        else:
+            if yaw>-180 and yaw<=-90:
+                l_pos = -rel_y if delta_x<delta_y else rel_x
+                f_pos = fy if delta_x<delta_y else -fx
+                
+            elif yaw>-90 and yaw<=0:
+                l_pos = rel_y if delta_x<delta_y else rel_x
+                f_pos = -fy if delta_x<delta_y else -fx
             
-            print(self.yaw, alpha, s)
+            elif yaw>0 and yaw<=90:
+                l_pos = rel_y if delta_x<delta_y else -rel_x
+                f_pos = -fy if delta_x<delta_y else fx
+            
+            elif yaw>90 and yaw<=180:
+                l_pos = -rel_y if delta_x<delta_y else -rel_x
+                f_pos = fy if delta_x<delta_y else fx
+            
+            if sign(l_pos)==sign(f_pos): l_pos = -l_pos
+
+            s = (l_pos+f_pos)/40
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+
+            if lyaw>90 and yaw<-90:
+                corr=(lyaw-yaw-360)/60
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            
+            elif lyaw<-90 and yaw>90:
+                corr=(lyaw-yaw+360)/60
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            
+            else:
+                corr=(lyaw-yaw)/60
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
         
         return s
 
@@ -136,13 +246,11 @@ class Follower(PlatoonMember):
     def move(self):
         self.update_position()
         wp = self.waypoints[0]
-        target_x = wp[0]
-        target_y = wp[1]
-        s = wp[2]
-        if abs(self.x-target_x)<0.05 and abs(self.y-target_y)<0.05:
-            self.waypoints.pop(0)
         self.checkDistance()
+        s = 0.0
         t, b = self.defineThrottle()
+        if self.speed>0.03:
+            s = self.defineSteer()
         control = carla.VehicleControl(throttle=t, steer=s, brake=b)
         self.vehicle.apply_control(control)
     

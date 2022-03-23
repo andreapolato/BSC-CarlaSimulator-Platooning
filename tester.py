@@ -24,7 +24,7 @@ try:
     model3 = blueprint_library.filter('model3')[0]
 
     #spawn = random.choice(world.get_map().get_spawn_points())
-    spawn = carla.Transform(carla.Location(x=-15.407496, y=133.728470, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.647827, roll=0.000000))
+    spawn = carla.Transform(carla.Location(x=5.407496, y=133.728470, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.647827, roll=0.000000))
 
 
     PlatooningLeader = world.spawn_actor(model3, spawn)
@@ -45,14 +45,14 @@ try:
     leader.addFollower(follower)
     world.on_tick(lambda snap: follower.move())
 
-    #sleep(2)
     #spawn.location.x += 12
-    #model3.set_attribute('color','255,0,0')
-    #PlatooningFollower2 = world.spawn_actor(model3, spawn)
-    #actor_list.append(PlatooningFollower2)
-    #follower2 = Follower(PlatooningFollower2, follower)
-    #leader.addFollower(follower2)
-    #world.on_tick(lambda snap: follower2.move())
+    sleep(2)
+    model3.set_attribute('color','0,255,0')
+    PlatooningFollower2 = world.spawn_actor(model3, spawn)
+    actor_list.append(PlatooningFollower2)
+    follower2 = Follower(PlatooningFollower2, follower)
+    leader.addFollower(follower2)
+    world.on_tick(lambda snap: follower2.move())
 
     trans = spawn
     trans.location.z = 100

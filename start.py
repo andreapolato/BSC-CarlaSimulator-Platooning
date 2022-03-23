@@ -98,11 +98,15 @@ def sign(number):
   if number>=0: return 1
   else: return -1
 
-def set_steer(fx,fy,yaw):
+def set_steer(fx,fy,yaw,fspeed):
+ 
+    if fspeed<=0.03: return 0.0
+
     with open(dir + '/vehicle_data_leader.csv', newline='') as f:
         r = csv.DictReader(f, fieldnames=fn)
         rl = list(r)
         n=0
+        limit=1000
         s=0.0
         delta_x = delta_y = 360
         best_x = best_y = rel_x = rel_y = 0
@@ -111,24 +115,24 @@ def set_steer(fx,fy,yaw):
                 lx = float(row['X'])
                 ly = float(row['Y'])
                 lyaw = float(row['Yaw'])
-                toll = 0.1 if follower_going_straight() else 0.4
+                toll = 0.01 if follower_going_straight() else 0.5
                 if abs(lx-fx)<= toll and abs(ly-fy)<= toll:
-                    #print("FOLLOWING")
                     s=float(row['Steer'])
                     if lyaw<-90 and yaw>90:
-                        #print((lyaw-yaw+360)/180)
-                        s+=(lyaw-yaw+360)/180
+                        corr=(lyaw-yaw+360)/90
                     elif lyaw>90 and yaw<-90:
-                        #print((lyaw-yaw-360)/180)
-                        s+=(lyaw-yaw-360)/180
+                        corr=(lyaw-yaw-360)/90
                     else:
-                        #print((lyaw-yaw)/180)
-                        s+=(lyaw-yaw)/180
+                        corr=(lyaw-yaw)/90
+                    if corr > 1.0: corr = 1.0
+                    elif corr < -1.0: corr = -1.0
+                    s+=corr
                     if s>1.0:
                         s=1.0
                     elif s<-1.0:
                         s=-1.0
                     return s
+                
                 else:
                     if abs(lx-fx) < delta_x:
                         rel_y = ly
@@ -138,75 +142,105 @@ def set_steer(fx,fy,yaw):
                         rel_x = lx
                         delta_y = abs(ly-fy)
                         yaw_y=lyaw
+            
             n+=1
-            if n>=1000: break
+            if n>=limit: break
         
         lyaw = yaw_x if delta_x<delta_y else yaw_y
-        yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
-        same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
+        #yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
+        #same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
         
-        if abs(yaw)<=3: #going east
-            s=(rel_y-fy)/20 + (lyaw-yaw)/180
+        corr = (lyaw-yaw)/90
 
-        elif abs(yaw)>=177: #going ovest
+        if abs(yaw)<=5: #going east
+            s=(rel_y-fy)/10
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
+        elif abs(yaw)>=175: #going ovest
             if lyaw>90 and yaw<-90:
-                s=(fy-rel_y)/20 + (lyaw-yaw-360)/180
+                corr-=4
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
             elif lyaw<-90 and yaw>90:
-                s=(fy-rel_y)/20 + (lyaw-yaw+360)/180
+                corr+=4
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
             else:
-                s=(fy-rel_y)/20 + (lyaw-yaw)/180
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
 
-        elif yaw<93 and yaw>87: #going south
-            s=(fx-rel_x)/20 + (lyaw-yaw)/180
+        elif yaw<95 and yaw>85: #going south
+            s=(fx-rel_x)/10
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
             
-        elif yaw>-93 and yaw<-87: #going north
-            s=(rel_x-fx)/20 + (lyaw-yaw)/180
+        elif yaw>-95 and yaw<-85: #going north
+            s=(rel_x-fx)/10 
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
 
         else:
             if yaw>-180 and yaw<=-90:
                 l_pos = -rel_y if delta_x<delta_y else rel_x
                 f_pos = fy if delta_x<delta_y else -fx
+                
             elif yaw>-90 and yaw<=0:
                 l_pos = rel_y if delta_x<delta_y else rel_x
                 f_pos = -fy if delta_x<delta_y else -fx
+            
             elif yaw>0 and yaw<=90:
                 l_pos = rel_y if delta_x<delta_y else -rel_x
                 f_pos = -fy if delta_x<delta_y else fx
+            
             elif yaw>90 and yaw<=180:
                 l_pos = -rel_y if delta_x<delta_y else -rel_x
                 f_pos = fy if delta_x<delta_y else fx
+            
+            if sign(l_pos)==sign(f_pos): l_pos = -l_pos
+
             s = (l_pos+f_pos)/40
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
 
             if lyaw>90 and yaw<-90:
-                s+=(lyaw-yaw-360)/90
+                corr=(lyaw-yaw-360)/90
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            
             elif lyaw<-90 and yaw>90:
-                s+=(lyaw-yaw+360)/90
+                corr=(lyaw-yaw+360)/90
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            
             else:
-                s+=(lyaw-yaw)/90
-
-
-        #print(s)
-        if s>1.0:
-            s=1.0
-        elif s<-1.0:
-            s=-1.0
-        return s
-                
-        #print("GENERIC CORRECTION", leader_going_straight(), follower_going_straight)
-        #AGGIUNGWERE CHECK SU ANGOLO DEL LEADER?
-        #print("base:",s)
-        #print("lyaw:",lyaw)
-        #print("fyaw:",yaw)
-        #print("corrected:",s)
-        if s>1.0:
-            s=1.0
-        elif s<-1.0:
-            s=-1.0
-        if abs(s)>0.1:
-            print("Generic correction:",s,l_pos,f_pos)
-            print("Delta x-y:",delta_x,delta_y)
-            print("Follower x-y:",fx,fy)
-            print("Leader x-y:",rel_x,rel_y)
+                corr=(lyaw-yaw)/90
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+        
         return s
 
 
@@ -230,21 +264,22 @@ def manage_follower(snap):
                     lspeed = float(row['Km/h'])
                     delta = lspeed-fspeed
                     global big_dist
-                    if lspeed>0.03:
-                        s = set_steer(fx,fy,yaw)
-                        if (delta>=0):
+                    if lspeed>0.04:
+                        s = set_steer(fx,fy,yaw,fspeed)
+                        if (delta>0.03):
                             boost = 0.2 if big_dist else 0.0
                             t = delta/10 + boost if delta/10 + boost <= 1.0 else 1.0
                         else:
-                            s = set_steer(fx,fy,yaw)
+                            s = set_steer(fx,fy,yaw,fspeed)
                             if not big_dist:
                               b = -delta/10 if -delta/10 <= 1.0 else 1.0
                     else:
-                        s = set_steer(fx,fy,yaw)
+                        s = set_steer(fx,fy,yaw,fspeed)
                         if big_dist:
                             t = 0.2
                         else:
                             b = 0.8
+                    if s>0.005: t = t/2
                     PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
 
 def check_distance():

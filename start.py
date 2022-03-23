@@ -1,12 +1,16 @@
 from concurrent.futures import process
 from dis import dis
+from distutils.log import log
 import glob
 from multiprocessing.connection import wait
+from ntpath import join
 import os
 from pyexpat import model
 import re
 import sys
 from tabnanny import check
+import threading
+from turtle import speed
 from PIL import Image
 
 try:
@@ -34,10 +38,12 @@ IMG_WIDTH = 1280
 IMG_HEIGHT = 720
 
 actor_list = []
+platoon_members = []
 snap_list = []
+F2Spawned = False
 leader_pos_list = [[0,0],[0,0],[0,0],[0,0],[0,0]]
 follower_pos_list = [[0,0],[0,0],[0,0],[0,0],[0,0]]
-big_dist = True
+big_dist = []
 
 def convert_time(seconds):
     seconds = seconds%(24*3600)
@@ -67,7 +73,7 @@ def extract_data(snap,vehicle):
     if vehicle==PlatooningLeader:
         leader_pos_list.append([float(x),float(y)])
         leader_pos_list.pop(0)
-    with open(dir + '/vehicle_data_%s.csv'%('leader' if vehicle==PlatooningLeader else 'follower'), 'a+', newline='') as f:
+    with open(dir + '/vehicle_data_%s.csv'%vehicle.id, 'a+', newline='') as f:
         w = csv.DictWriter(f, fieldnames=fn)
         output = {'Snap':frame,'Time':time, 'ID':id, 'Type':type, 'X':x, 'Y':y, 'Z':z, 'Yaw':ya, 'Km/h':speed, 'Throttle':throttle, 'Steer':steer, 'Brake':brake}
         w.writerow(output)
@@ -98,11 +104,15 @@ def sign(number):
   if number>=0: return 1
   else: return -1
 
-def set_steer(fx,fy,yaw):
-    with open(dir + '/vehicle_data_leader.csv', newline='') as f:
+def set_steer(fx,fy,yaw,fspeed):
+ 
+    if fspeed<=0.03: return 0.0
+
+    with open(dir + '/vehicle_data_%d.csv'%PlatooningLeader.id, newline='') as f:
         r = csv.DictReader(f, fieldnames=fn)
         rl = list(r)
         n=0
+        limit=1000
         s=0.0
         delta_x = delta_y = 360
         best_x = best_y = rel_x = rel_y = 0
@@ -111,24 +121,24 @@ def set_steer(fx,fy,yaw):
                 lx = float(row['X'])
                 ly = float(row['Y'])
                 lyaw = float(row['Yaw'])
-                toll = 0.1 if follower_going_straight() else 0.4
+                toll = 0.01 if follower_going_straight() else 0.5
                 if abs(lx-fx)<= toll and abs(ly-fy)<= toll:
-                    #print("FOLLOWING")
                     s=float(row['Steer'])
                     if lyaw<-90 and yaw>90:
-                        #print((lyaw-yaw+360)/180)
-                        s+=(lyaw-yaw+360)/180
+                        corr=(lyaw-yaw+360)/90
                     elif lyaw>90 and yaw<-90:
-                        #print((lyaw-yaw-360)/180)
-                        s+=(lyaw-yaw-360)/180
+                        corr=(lyaw-yaw-360)/90
                     else:
-                        #print((lyaw-yaw)/180)
-                        s+=(lyaw-yaw)/180
+                        corr=(lyaw-yaw)/90
+                    if corr > 1.0: corr = 1.0
+                    elif corr < -1.0: corr = -1.0
+                    s+=corr
                     if s>1.0:
                         s=1.0
                     elif s<-1.0:
                         s=-1.0
                     return s
+                
                 else:
                     if abs(lx-fx) < delta_x:
                         rel_y = ly
@@ -138,82 +148,111 @@ def set_steer(fx,fy,yaw):
                         rel_x = lx
                         delta_y = abs(ly-fy)
                         yaw_y=lyaw
+            
             n+=1
-            if n>=1000: break
+            if n>=limit: break
         
         lyaw = yaw_x if delta_x<delta_y else yaw_y
-        yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
-        same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
+        #yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
+        #same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
         
-        if abs(yaw)<=3: #going east
-            s=(rel_y-fy)/20 + (lyaw-yaw)/180
+        corr = (lyaw-yaw)/90
 
-        elif abs(yaw)>=177: #going ovest
+        if abs(yaw)<=5: #going east
+            s=(rel_y-fy)/10
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
+        elif abs(yaw)>=175: #going ovest
             if lyaw>90 and yaw<-90:
-                s=(fy-rel_y)/20 + (lyaw-yaw-360)/180
+                corr-=4
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
             elif lyaw<-90 and yaw>90:
-                s=(fy-rel_y)/20 + (lyaw-yaw+360)/180
+                corr+=4
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
             else:
-                s=(fy-rel_y)/20 + (lyaw-yaw)/180
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
 
-        elif yaw<93 and yaw>87: #going south
-            s=(fx-rel_x)/20 + (lyaw-yaw)/180
+        elif yaw<95 and yaw>85: #going south
+            s=(fx-rel_x)/10
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
             
-        elif yaw>-93 and yaw<-87: #going north
-            s=(rel_x-fx)/20 + (lyaw-yaw)/180
+        elif yaw>-95 and yaw<-85: #going north
+            s=(rel_x-fx)/10 
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
 
         else:
             if yaw>-180 and yaw<=-90:
                 l_pos = -rel_y if delta_x<delta_y else rel_x
                 f_pos = fy if delta_x<delta_y else -fx
+                
             elif yaw>-90 and yaw<=0:
                 l_pos = rel_y if delta_x<delta_y else rel_x
                 f_pos = -fy if delta_x<delta_y else -fx
+            
             elif yaw>0 and yaw<=90:
                 l_pos = rel_y if delta_x<delta_y else -rel_x
                 f_pos = -fy if delta_x<delta_y else fx
+            
             elif yaw>90 and yaw<=180:
                 l_pos = -rel_y if delta_x<delta_y else -rel_x
                 f_pos = fy if delta_x<delta_y else fx
+            
+            if sign(l_pos)==sign(f_pos): l_pos = -l_pos
+
             s = (l_pos+f_pos)/40
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
 
             if lyaw>90 and yaw<-90:
-                s+=(lyaw-yaw-360)/90
+                corr=(lyaw-yaw-360)/90
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            
             elif lyaw<-90 and yaw>90:
-                s+=(lyaw-yaw+360)/90
+                corr=(lyaw-yaw+360)/90
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            
             else:
-                s+=(lyaw-yaw)/90
-
-
-        #print(s)
-        if s>1.0:
-            s=1.0
-        elif s<-1.0:
-            s=-1.0
-        return s
-                
-        #print("GENERIC CORRECTION", leader_going_straight(), follower_going_straight)
-        #AGGIUNGWERE CHECK SU ANGOLO DEL LEADER?
-        #print("base:",s)
-        #print("lyaw:",lyaw)
-        #print("fyaw:",yaw)
-        #print("corrected:",s)
-        if s>1.0:
-            s=1.0
-        elif s<-1.0:
-            s=-1.0
-        if abs(s)>0.1:
-            print("Generic correction:",s,l_pos,f_pos)
-            print("Delta x-y:",delta_x,delta_y)
-            print("Follower x-y:",fx,fy)
-            print("Leader x-y:",rel_x,rel_y)
+                corr=(lyaw-yaw)/90
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+        
         return s
 
-
-def manage_follower(snap):
-    with open(dir + '/vehicle_data_leader.csv', newline='') as f:
+def manage_follower(snap,vehicle, i):
+    with open(dir + '/vehicle_data_%d.csv'%PlatooningLeader.id, newline='') as f:
         r = csv.DictReader(f, fieldnames=fn)
-        vehicle_snap = snap.find(PlatooningFollower.id)
+        vehicle_snap = snap.find(vehicle.id)
         transform = vehicle_snap.get_transform()
         yaw = float(transform.rotation.yaw)
         vel = vehicle_snap.get_velocity()
@@ -230,29 +269,34 @@ def manage_follower(snap):
                     lspeed = float(row['Km/h'])
                     delta = lspeed-fspeed
                     global big_dist
-                    if lspeed>0.03:
-                        s = set_steer(fx,fy,yaw)
-                        if (delta>=0):
-                            boost = 0.2 if big_dist else 0.0
+                    if lspeed>0.04:
+                        s = set_steer(fx,fy,yaw,fspeed)
+                        if (delta>0.03):
+                            boost = 0.4 if big_dist[i] else 0.0
                             t = delta/10 + boost if delta/10 + boost <= 1.0 else 1.0
                         else:
-                            s = set_steer(fx,fy,yaw)
-                            if not big_dist:
-                              b = -delta/10 if -delta/10 <= 1.0 else 1.0
+                            t += 0.3
+                            s = set_steer(fx,fy,yaw,fspeed)
+                            if not big_dist[i]:
+                                t = 0.0
+                                b = -delta/10 if -delta/10 <= 1.0 else 1.0
                     else:
-                        s = set_steer(fx,fy,yaw)
-                        if big_dist:
+                        s = set_steer(fx,fy,yaw,fspeed)
+                        if big_dist[i]:
                             t = 0.2
                         else:
                             b = 0.8
-                    PlatooningFollower.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
+                    if s>0.005: t = t/2
+                    vehicle.apply_control(carla.VehicleControl(throttle=t, steer=s, brake=b))
 
 def check_distance():
     global big_dist
-    follower_pos = PlatooningFollower.get_transform()
-    leader_pos = PlatooningLeader.get_transform()
-    dist = abs(((follower_pos.location.x-leader_pos.location.x)**2 + (follower_pos.location.y-leader_pos.location.y)**2)**(1/2))
-    big_dist = dist>12.0
+    for i in range(len(platoon_members)):
+        if platoon_members[i]!=PlatooningLeader:
+            follower_pos = platoon_members[i].get_transform()
+            leader_pos = platoon_members[i-1].get_transform()
+            dist = abs(((follower_pos.location.x-leader_pos.location.x)**2 + (follower_pos.location.y-leader_pos.location.y)**2)**(1/2))
+            big_dist[i-1] = dist>12.0
 
 def get_points(points):
     min = 500
@@ -260,17 +304,20 @@ def get_points(points):
         if p.point.x<min:
             min = p.point.x
     global big_dist
-    #big_dist = True if min>=2 else False
+    big_dist = True if min>=2 else False
             
-
-
+def create_file(vehicle):
+    with open(dir + '/vehicle_data_%d.csv'%vehicle.id, 'w', newline='') as f:
+        w = csv.DictWriter(f, fieldnames=fn)
+        print('Leader CSV file created.')
+        w.writeheader()
         
 try:
     client = carla.Client('localhost', 2000)
     client.set_timeout(5.0)
     
     world = client.get_world()
-    #world = client.load_world('Town01')
+    #world = client.load_world('Town06')
     settings = world.get_settings()
     settings.fixed_delta_seconds = 0.01
     world.apply_settings(settings)
@@ -284,49 +331,45 @@ try:
     dir = 'recs/' + time.strftime("%Y%m%d-%H%M%S")
     if not os.path.exists(dir):
         os.makedirs(dir)
-
-    with open(dir + '/vehicle_data_leader.csv', 'w', newline='') as f:
-        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Yaw', 'Km/h', 'Throttle', 'Steer', 'Brake']
-        w = csv.DictWriter(f, fieldnames=fn)
-        print('Leader CSV file created.')
-        w.writeheader()
-
-    with open(dir + '/vehicle_data_follower.csv', 'w', newline='') as f:
-        fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Yaw', 'Km/h', 'Throttle', 'Steer', 'Brake']
-        w = csv.DictWriter(f, fieldnames=fn)
-        print('Follower CSV file created.')
-        w.writeheader()
-
-    with open(dir + '/lidar_data_follower.csv', 'w', newline='') as f:
-        ln = ['Location']
-        w = csv.DictWriter(f, fieldnames=ln)
-        print('Lidar CSV file created.')
-        w.writeheader()
-
+    fn = ['Snap','Time', 'ID', 'Type', 'X', 'Y', 'Z', 'Yaw', 'Km/h', 'Throttle', 'Steer', 'Brake']
+    
     world.on_tick(lambda snap: record_vehicle_data(snap))
     model3 = blueprint_library.filter('model3')[0]
 
-    spawn = random.choice(world.get_map().get_spawn_points())
-
+    spawn = carla.Transform(carla.Location(x=-15.407496, y=133.728470, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.647827, roll=0.000000))
+    
     PlatooningLeader = world.spawn_actor(model3, spawn)
+    create_file(PlatooningLeader)
     PlatooningLeader.set_autopilot(True)
     actor_list.append(PlatooningLeader)
+    platoon_members.append(PlatooningLeader)
 
-    time.sleep(2)
+    spawn.location.x += 12
     model3.set_attribute('color','255,0,0')
     PlatooningFollower = world.spawn_actor(model3, spawn)
+    create_file(PlatooningFollower)
+    big_dist.append(False)
     actor_list.append(PlatooningFollower)
+    platoon_members.append(PlatooningFollower)
+    
+    spawn.location.x += 12
+    model3.set_attribute('color','0,255,0')
+    PlatooningFollower2 = world.spawn_actor(model3, spawn)
+    create_file(PlatooningFollower2)
+    big_dist.append(False)
+    actor_list.append(PlatooningFollower2)
+    platoon_members.append(PlatooningFollower2)
 
-    spawn = carla.Transform(carla.Location(x=2.5, z=0.8))
+    sensorspawn = carla.Transform(carla.Location(x=2.5, z=0.8))
     lidar_bp = blueprint_library.find('sensor.lidar.ray_cast')
     lidar_bp.set_attribute('horizontal_fov','90')
     lidar_bp.set_attribute('upper_fov','5')
     lidar_bp.set_attribute('lower_fov','-5')
-    LidarFollower = world.spawn_actor(lidar_bp, spawn, attach_to=PlatooningFollower)
+    LidarFollower = world.spawn_actor(lidar_bp, sensorspawn, attach_to=PlatooningFollower)
     actor_list.append(LidarFollower)
 
     lanecrossing_bp = blueprint_library.find('sensor.other.lane_invasion')
-    LaneSensorFollower = world.spawn_actor(lanecrossing_bp, spawn, attach_to=PlatooningFollower)
+    LaneSensorFollower = world.spawn_actor(lanecrossing_bp, sensorspawn, attach_to=PlatooningFollower)
     actor_list.append(LaneSensorFollower)
 
     
@@ -341,11 +384,17 @@ try:
     trans.rotation.roll=0
     world.get_spectator().set_transform(trans)
 
-    time.sleep(1)
+    
+
     while True:
+        dist_thread = threading.Thread(target=check_distance())
+        dist_thread.start()
+
         if(snap_list):
-            manage_follower(snap_list[-1])
-            check_distance()
+            threading.Thread(target=manage_follower(snap_list[-1], PlatooningFollower, 0)).start()
+            threading.Thread(target=manage_follower(snap_list[-1], PlatooningFollower2, 1)).start()
+       
+        world.wait_for_tick()
         
 except KeyboardInterrupt:
     pass

@@ -1,92 +1,294 @@
-import random
-from time import sleep
 import carla
-from platooning import Follower, Leader
+import math
+import numpy as np
 
-actor_list = []
+def sign(number):
+  if number>=0: return 1
+  else: return -1
 
-try:
-    client = carla.Client('localhost', 2000)
-    client.set_timeout(5.0)
+class PlatoonMember:
     
-    #world = client.get_world()
-    world = client.load_world('Town06')
-    settings = world.get_settings()
-    settings.fixed_delta_seconds = 0.01
-    world.apply_settings(settings)
-
-    blueprint_library = world.get_blueprint_library()
-
-    for v in world.get_actors():
-        if isinstance(v, carla.Vehicle):
-            v.destroy()
-
-    model3 = blueprint_library.filter('model3')[0]
-
-    spawn = random.choice(world.get_map().get_spawn_points())
-    #spawn = carla.Transform(carla.Location(x=5.407496, y=133.728470, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.647827, roll=0.000000))
-
-    sensor_spawn = carla.Transform(carla.Location(x=2.5, z=0.8))
-    lidar_bp = blueprint_library.find('sensor.lidar.ray_cast')
-    lidar_bp.set_attribute('horizontal_fov','45')
-    lidar_bp.set_attribute('upper_fov','5')
-    lidar_bp.set_attribute('lower_fov','-5')
-    lidar_bp.set_attribute('range','20.0')
-
-
-    PlatooningLeader = world.spawn_actor(model3, spawn)
-    PlatooningLeader.set_autopilot(True)
-    actor_list.append(PlatooningLeader)
-    PlatooningLeader.set_autopilot()
-
-    leader = Leader(PlatooningLeader)
-
-    world.on_tick(lambda snap: leader.move())
-
-    spawn.location.x += 12
-    #sleep(2)
-    model3.set_attribute('color','255,0,0')
-    PlatooningFollower = world.spawn_actor(model3, spawn)
-    actor_list.append(PlatooningFollower)
+    def __init__(self, vehicle: carla.Vehicle):
+        self.vehicle = vehicle
+        tr = self.vehicle.get_transform()
+        con = self.vehicle.get_control()
+        vel = self.vehicle.get_velocity()
+        self.x = tr.location.x
+        self.y = tr.location.y
+        self.z = tr.location.z
+        self.yaw = tr.rotation.yaw
+        self.speed = 3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)
+        self.throttle = con.throttle
+        self.steer = con.steer
+        self.brake = con.brake
     
-    LidarFollower = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower)
-    actor_list.append(LidarFollower)
+    def update_position(self):
+        tr = self.vehicle.get_transform()
+        con = self.vehicle.get_control()
+        vel = self.vehicle.get_velocity()
+        self.x = tr.location.x
+        self.y = tr.location.y
+        self.z = tr.location.z
+        self.yaw = tr.rotation.yaw
+        self.speed = 3.6*math.sqrt(vel.x**2 + vel.y**2 + vel.z**2)
+        self.throttle = con.throttle
+        self.steer = con.steer
+        self.brake = con.brake
 
-    follower = Follower(PlatooningFollower, leader)
-    leader.addFollower(follower)
-    world.on_tick(lambda snap: follower.move())
-    LidarFollower.listen(lambda points: follower.checkLidar(points))
-
-    spawn.location.x += 12
-    #sleep(2)
-    model3.set_attribute('color','0,255,0')
-    PlatooningFollower2 = world.spawn_actor(model3, spawn)
-    actor_list.append(PlatooningFollower2)
+    def get_pos(self):
+        return self.x, self.y
     
-    LidarFollower2 = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower2)
-    actor_list.append(LidarFollower)
+class Leader(PlatoonMember):
     
-    follower2 = Follower(PlatooningFollower2, follower)
-    leader.addFollower(follower2)
-    world.on_tick(lambda snap: follower2.move())
-    LidarFollower2.listen(lambda points: follower2.checkLidar(points))
+    followers = []
+   
+    def __init__(self, vehicle: carla.Vehicle):
+        super().__init__(vehicle)
+   
+    def addFollower(self, f: carla.Vehicle):
+        self.followers.append(f)
+   
+    def move(self):
+        self.update_position()
+        self.update_follower()
 
+    def update_follower(self):
+        for follower in self.followers:
+            if self.speed>0.03:
+                follower.addWaypoint([self.x, self.y, self.yaw, self.steer])
+                follower.setSpeedGoal(self.speed)
 
-    trans = spawn
-    trans.location.z = 100
-    trans.rotation.pitch=-90
-    trans.rotation.yaw=0
-    trans.rotation.roll=0
-    world.get_spectator().set_transform(trans)
+class Follower(PlatoonMember):
+  
+    leader: PlatoonMember
+    waypoints = []
+  
+    def __init__(self, vehicle:carla.Vehicle, lead:PlatoonMember):
+        super().__init__(vehicle)
+        self.leader = lead
+        self.speedGoal = 0.0
+        self.last_t = 0.0
+        self.big_dist = False
+        self.leader_dist = 0.0
+        self.safe_dist = 12.0
+        self.override_brake = False
 
-    while True:
-        world.wait_for_tick()
+    def update_position(self):
+        super().update_position()
+        x = self.x
+        y = self.y
+        tx,ty = self.leader.get_pos()
+        self.leader_dist = ((x-tx)**2 + (y-ty)**2)**(1/2)
+        self.safe_dist = max(12.0, self.speed/2)
+        if self.leader_dist > self.safe_dist: self.big_dist = True
+        else: self.big_dist = False
 
-except KeyboardInterrupt:
-    pass
+    def checkLidar(self,points):
+        detection=False
+        for p in points:
+            print(self.vehicle, p.point.x)
+            if p.point.x<self.safe_dist-5 and self.safe_dist<20:
+                detection= True
+            if self.safe_dist>20 and p.point.x<19:
+                detection=True
+                break
+        self.override_brake=detection
 
-finally:
-    print('destroying actors')
-    for actor in actor_list:
-        actor.destroy()
-    print('done.')
+    def addWaypoint(self, wp):
+        self.waypoints.append(wp)
+   
+    def setSpeedGoal(self, s):
+        self.speedGoal = s
+   
+    def defineThrottle(self):
+        delta = self.speedGoal - self.speed
+        t = b = 0.0
+        if self.speedGoal>0.04:
+            if (delta>0):
+                boost = 0.4 if self.big_dist else 0.0
+                t = (delta/10 + boost) if (delta/10 + boost) <= 1.0 else 1.0
+            else:
+                t = self.last_t
+                if not self.big_dist:
+                    b = -delta/10 if -delta/10 <= 1.0 else 1.0
+        else:
+            if self.big_dist:
+                t = 0.2
+            else:
+                b = 0.8
+        self.last_t=t
+        return t, b
+
+    def defineSteer(self):
+        rl = self.waypoints
+        fx = self.x
+        fy = self.y
+        rel_yaw = yaw = self.yaw
+        n=0
+        limit=1000
+        s=0.0
+        delta = delta_x = delta_y = 1000
+        rel_x = rel_y = 0
+        for row in reversed(rl):
+            lx = row[0]
+            ly = row[1]
+            lyaw = row[2]
+            toll = 0.1
+            if abs(lx-fx)<= toll and abs(ly-fy)<= toll:
+                s=row[3]
+                if lyaw<-90 and yaw>90:
+                    corr=(lyaw-yaw+360)/60
+                elif lyaw>90 and yaw<-90:
+                    corr=(lyaw-yaw-360)/60
+                else:
+                    corr=(lyaw-yaw)/60
+                if corr > 1.0: corr = 1.0
+                elif corr < -1.0: corr = -1.0
+                s+=corr
+                if s>1.0:
+                    s=1.0
+                elif s<-1.0:
+                    s=-1.0
+                return s
+            
+            else:
+                diff = ((fx-lx)**2 + (fy-ly)**2)**(1/2)
+                if diff < delta:
+                    rel_y = ly
+                    rel_x = lx
+                    delta = diff
+                    rel_yaw = lyaw
+                    if abs(lx-fx) < delta_x:
+                        delta_x = abs(lx-fx)
+                    if abs(ly-fy) < delta_y:
+                        delta_y = abs(ly-fy)                        
+        print(yaw)
+
+        lyaw = rel_yaw
+        #yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
+        #same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
+        
+        corr = (lyaw-yaw)/60
+
+        if abs(lyaw)<=10: #going east
+            s=(rel_y-fy)/10
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
+        elif abs(lyaw)>=170: #going ovest
+            if lyaw>90 and yaw<-90:
+                corr-=4
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            elif lyaw<-90 and yaw>90:
+                corr+=4
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            else:
+                s=(fy-rel_y)/10
+                if s>1.0: s=1.0
+                elif s<-1.0: s=-1.0
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+
+        elif lyaw<100 and lyaw>80: #going south
+            s=(fx-rel_x)/10
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
+            
+        elif lyaw>-100 and lyaw<-80: #going north
+            s=(rel_x-fx)/10 
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+            if corr>1.0: corr = 1.0
+            elif corr<-1.0: corr = -1.0
+            s+=corr
+
+        else:
+            if lyaw>-180 and lyaw<=-90:
+                xs = (rel_x-fx)/40
+                if xs > 1.0: xs = 1.0
+                elif xs < -1.0: xs = -1.0
+
+                ys = (fy-rel_y)/40
+                if ys > 1.0: ys = 1.0
+                elif ys < -1.0: ys = -1.0
+                
+            elif lyaw>-90 and lyaw<=0:
+                xs = (rel_x-fx)/40
+                if xs > 1.0: xs = 1.0
+                elif xs < -1.0: xs = -1.0
+
+                ys = (rel_y-fx)/40
+                if ys > 1.0: ys = 1.0
+                elif ys < -1.0: ys = -1.0
+            
+            elif lyaw>0 and lyaw<=90:
+                xs = (fx-rel_x)/40
+                if xs > 1.0: xs = 1.0
+                elif xs < -1.0: xs = -1.0
+
+                ys = (rel_y-fx)/40
+                if ys > 1.0: ys = 1.0
+                elif ys < -1.0: ys = -1.0
+            
+            elif lyaw>90 and lyaw<=180:
+                xs = (fx-rel_x)/40
+                if xs > 1.0: xs = 1.0
+                elif xs < -1.0: xs = -1.0
+
+                ys = (fy-rel_y)/40
+                if ys > 1.0: ys = 1.0
+                elif ys < -1.0: ys = -1.0
+            
+            #if sign(l_pos)==sign(f_pos): l_pos = -l_pos
+
+            s = (xs+ys)/40
+            if s>1.0: s=1.0
+            elif s<-1.0: s=-1.0
+
+            if lyaw>90 and yaw<-90:
+                corr=(lyaw-yaw-360)/60
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            
+            elif lyaw<-90 and yaw>90:
+                corr=(lyaw-yaw+360)/60
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+            
+            else:
+                corr=(lyaw-yaw)/60
+                if corr>1.0: corr = 1.0
+                elif corr<-1.0: corr = -1.0
+                s+=corr
+        
+        return s
+
+    def move(self):
+        self.update_position()
+        s = 0.0
+        if self.override_brake: control = carla.VehicleControl(throttle=0, steer=0, brake=1.0)
+        else:
+            if self.speed>0.03:
+                s = self.defineSteer()
+            t, b = self.defineThrottle()
+            control = carla.VehicleControl(throttle=t, steer=s, brake=b)
+        self.vehicle.apply_control(control)
+    

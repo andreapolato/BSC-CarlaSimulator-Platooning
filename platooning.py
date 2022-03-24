@@ -69,7 +69,31 @@ class Follower(PlatoonMember):
         self.speedGoal = 0.0
         self.last_t = 0.0
         self.big_dist = False
-   
+        self.leader_dist = 0.0
+        self.safe_dist = 12.0
+        self.override_brake = False
+
+    def update_position(self):
+        super().update_position()
+        x = self.x
+        y = self.y
+        tx,ty = self.leader.get_pos()
+        self.leader_dist = ((x-tx)**2 + (y-ty)**2)**(1/2)
+        self.safe_dist = max(12.0, self.speed/2)
+        if self.leader_dist > self.safe_dist: self.big_dist = True
+        else: self.big_dist = False
+
+    def checkLidar(self,points):
+        detection=False
+        for p in points:
+            print(self.vehicle, p.point.x)
+            if p.point.x<self.safe_dist-5 and self.safe_dist<20:
+                detection= True
+            if self.safe_dist>20 and p.point.x<19:
+                detection=True
+                break
+        self.override_brake=detection
+
     def addWaypoint(self, wp):
         self.waypoints.append(wp)
    
@@ -81,7 +105,7 @@ class Follower(PlatoonMember):
         t = b = 0.0
         if self.speedGoal>0.04:
             if (delta>0):
-                boost = 0.2 if self.big_dist else 0.0
+                boost = 0.4 if self.big_dist else 0.0
                 t = (delta/10 + boost) if (delta/10 + boost) <= 1.0 else 1.0
             else:
                 t = self.last_t
@@ -137,21 +161,21 @@ class Follower(PlatoonMember):
                     rel_x = lx
                     delta_y = abs(ly-fy)
                     yaw_y=lyaw
-                    
+            
         lyaw = yaw_x if delta_x<delta_y else yaw_y
         #yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
         #same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
         
         corr = (lyaw-yaw)/60
 
-        if abs(yaw)<=5: #going east
+        if abs(yaw)<=3: #going east
             s=(rel_y-fy)/10
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
             if corr>1.0: corr = 1.0
             elif corr<-1.0: corr = -1.0
             s+=corr
-        elif abs(yaw)>=175: #going ovest
+        elif abs(yaw)>=177: #going ovest
             if lyaw>90 and yaw<-90:
                 corr-=4
                 s=(fy-rel_y)/10
@@ -176,7 +200,7 @@ class Follower(PlatoonMember):
                 elif corr<-1.0: corr = -1.0
                 s+=corr
 
-        elif yaw<95 and yaw>85: #going south
+        elif yaw<93 and yaw>87: #going south
             s=(fx-rel_x)/10
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
@@ -184,7 +208,7 @@ class Follower(PlatoonMember):
             elif corr<-1.0: corr = -1.0
             s+=corr
             
-        elif yaw>-95 and yaw<-85: #going north
+        elif yaw>-93 and yaw<-87: #going north
             s=(rel_x-fx)/10 
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
@@ -235,22 +259,14 @@ class Follower(PlatoonMember):
         
         return s
 
-    def checkDistance(self):
-        x = self.x
-        y = self.y
-        tx,ty = self.leader.get_pos()
-        if ((x-tx)**2 + (y-ty)**2)**(1/2) > 12.0:
-            self.big_dist = True
-        else: self.big_dist = False
-
     def move(self):
         self.update_position()
-        wp = self.waypoints[0]
-        self.checkDistance()
         s = 0.0
-        t, b = self.defineThrottle()
-        if self.speed>0.03:
-            s = self.defineSteer()
-        control = carla.VehicleControl(throttle=t, steer=s, brake=b)
+        if self.override_brake: control = carla.VehicleControl(throttle=0, steer=0, brake=1.0)
+        else:
+            if self.speed>0.03:
+                s = self.defineSteer()
+            t, b = self.defineThrottle()
+            control = carla.VehicleControl(throttle=t, steer=s, brake=b)
         self.vehicle.apply_control(control)
     

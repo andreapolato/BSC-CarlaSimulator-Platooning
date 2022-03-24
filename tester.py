@@ -1,7 +1,6 @@
 from time import sleep
 import carla
-import random
-from leader import Follower, Leader
+from platooning import Follower, Leader
 
 actor_list = []
 

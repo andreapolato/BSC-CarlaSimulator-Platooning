@@ -162,7 +162,6 @@ class Follower(PlatoonMember):
                         delta_x = abs(lx-fx)
                     if abs(ly-fy) < delta_y:
                         delta_y = abs(ly-fy)                        
-        print(yaw)
 
         lyaw = rel_yaw
         #yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)

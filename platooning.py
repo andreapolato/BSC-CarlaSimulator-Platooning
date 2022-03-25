@@ -105,12 +105,12 @@ class Follower(PlatoonMember):
         return t, b
 
     def define_steer(self, wp, x, y, ya):
+        if self.speed<=0.03: return 0.0
+        
         rl = wp
         fx = x
         fy = y
         rel_yaw = yaw = ya
-        n=0
-        limit=1000
         s=0.0
         delta = delta_x = delta_y = 1000
         rel_x = rel_y = 0
@@ -277,15 +277,17 @@ class Follower(PlatoonMember):
     def move(self):
         self.update_position()
         self.cloud.retrieve_check_data(self)
+        self.control()
+        
+    def control(self):
         t = s = b = 0.0
         if self.override_brake: control = carla.VehicleControl(throttle=0, steer=0, brake=1.0)
         else:
-            if self.speed>0.03:
-                wp = self.waypoints
-                x = self.x
-                y = self.y
-                ya = self.yaw
-                s = self.define_steer(wp, x, y, ya)
+            wp = self.waypoints
+            x = self.x
+            y = self.y
+            ya = self.yaw
+            s = self.define_steer(wp, x, y, ya)
             sg = self.speedGoal
             ss = self.speed
             t, b = self.define_throttle(sg, ss)

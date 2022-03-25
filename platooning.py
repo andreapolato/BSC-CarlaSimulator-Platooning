@@ -134,7 +134,8 @@ class Follower(PlatoonMember):
             ly = row[1]
             lyaw = row[2]
             toll = 0.1
-            if abs(lx-fx)<= toll and abs(ly-fy)<= toll:
+            diff = ((fx-lx)**2 + (fy-ly)**2)**(1/2)
+            if diff <= toll:
                 s=row[3]
                 if lyaw<-90 and yaw>90:
                     corr=(lyaw-yaw+360)/60
@@ -152,7 +153,7 @@ class Follower(PlatoonMember):
                 return s
             
             else:
-                diff = ((fx-lx)**2 + (fy-ly)**2)**(1/2)
+                
                 if diff < delta:
                     rel_y = ly
                     rel_x = lx

@@ -123,13 +123,14 @@ class Follower(PlatoonMember):
         rl = self.waypoints
         fx = self.x
         fy = self.y
-        rel_yaw = yaw = self.yaw
+        yaw = self.yaw
         n=0
         limit=1000
         s=0.0
-        delta = delta_x = delta_y = 1000
+        delta_x = delta_y = 360
         rel_x = rel_y = 0
         for row in reversed(rl):
+            
             lx = row[0]
             ly = row[1]
             lyaw = row[2]
@@ -152,32 +153,29 @@ class Follower(PlatoonMember):
                 return s
             
             else:
-                diff = ((fx-lx)**2 + (fy-ly)**2)**(1/2)
-                if diff < delta:
+                if abs(lx-fx) < delta_x:
                     rel_y = ly
+                    delta_x = abs(lx-fx)
+                    yaw_x = lyaw
+                if abs(ly-fy) < delta_y:
                     rel_x = lx
-                    delta = diff
-                    rel_yaw = lyaw
-                    if abs(lx-fx) < delta_x:
-                        delta_x = abs(lx-fx)
-                    if abs(ly-fy) < delta_y:
-                        delta_y = abs(ly-fy)                        
-        print(yaw)
-
-        lyaw = rel_yaw
+                    delta_y = abs(ly-fy)
+                    yaw_y=lyaw
+            
+        lyaw = yaw_x if delta_x<delta_y else yaw_y
         #yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
         #same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
         
         corr = (lyaw-yaw)/60
-        print("CORREZIONE")
-        if abs(lyaw)<=10: #going east
+
+        if abs(yaw)<=3: #going east
             s=(rel_y-fy)/10
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
             if corr>1.0: corr = 1.0
             elif corr<-1.0: corr = -1.0
             s+=corr
-        elif abs(lyaw)>=170: #going ovest
+        elif abs(yaw)>=177: #going ovest
             if lyaw>90 and yaw<-90:
                 corr-=4
                 s=(fy-rel_y)/10
@@ -202,7 +200,7 @@ class Follower(PlatoonMember):
                 elif corr<-1.0: corr = -1.0
                 s+=corr
 
-        elif lyaw<100 and lyaw>80: #going south
+        elif yaw<93 and yaw>87: #going south
             s=(fx-rel_x)/10
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
@@ -210,81 +208,51 @@ class Follower(PlatoonMember):
             elif corr<-1.0: corr = -1.0
             s+=corr
             
-        elif lyaw>-100 and lyaw<-80: #going north
+        elif yaw>-93 and yaw<-87: #going north
             s=(rel_x-fx)/10 
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
             if corr>1.0: corr = 1.0
             elif corr<-1.0: corr = -1.0
             s+=corr
-        
 
         else:
-            print("CORREZIONE STRONZA")
             if yaw>-180 and yaw<=-90:
-                if sign(rel_x)==sign(fx): fx=-fx
-                xs = (rel_x-fx)/20
-                if xs > 1.0: xs = 1.0
-                elif xs < -1.0: xs = -1.0
-
-                if sign(rel_y)==sign(fy): rel_y=-rel_y
-                ys = (fy-rel_y)/20
-                if ys > 1.0: ys = 1.0
-                elif ys < -1.0: ys = -1.0
+                l_pos = -rel_y if delta_x<delta_y else rel_x
+                f_pos = fy if delta_x<delta_y else -fx
                 
             elif yaw>-90 and yaw<=0:
-                if sign(rel_x)==sign(fx): fx=-fx
-                xs = (rel_x-fx)/20
-                if xs > 1.0: xs = 1.0
-                elif xs < -1.0: xs = -1.0
-
-                if sign(rel_y)==sign(fy): fy=-fy
-                ys = (rel_y-fy)/20
-                if ys > 1.0: ys = 1.0
-                elif ys < -1.0: ys = -1.0
+                l_pos = rel_y if delta_x<delta_y else rel_x
+                f_pos = -fy if delta_x<delta_y else -fx
             
             elif yaw>0 and yaw<=90:
-                if sign(rel_x)==sign(fx): rel_x=-rel_x
-                xs = (fx-rel_x)/20
-                if xs > 1.0: xs = 1.0
-                elif xs < -1.0: xs = -1.0
-
-                if sign(rel_y)==sign(fy): fy=-fy
-                ys = (rel_y-fy)/20
-                if ys > 1.0: ys = 1.0
-                elif ys < -1.0: ys = -1.0
+                l_pos = rel_y if delta_x<delta_y else -rel_x
+                f_pos = -fy if delta_x<delta_y else fx
             
             elif yaw>90 and yaw<=180:
-                if sign(rel_x)==sign(fx): rel_x=-rel_x
-                xs = (fx-rel_x)/20
-                if xs > 1.0: xs = 1.0
-                elif xs < -1.0: xs = -1.0
-
-                if sign(rel_y)==sign(fy): rel_y=-rel_y
-                ys = (fy-rel_y)/20
-                if ys > 1.0: ys = 1.0
-                elif ys < -1.0: ys = -1.0
+                l_pos = -rel_y if delta_x<delta_y else -rel_x
+                f_pos = fy if delta_x<delta_y else fx
             
-            #if sign(l_pos)==sign(f_pos): l_pos = -l_pos
+            if sign(l_pos)==sign(f_pos): l_pos = -l_pos
 
-            s = (xs+ys)
+            s = (l_pos+f_pos)/40
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
 
             if lyaw>90 and yaw<-90:
-                corr=(lyaw-yaw-360)/90
+                corr=(lyaw-yaw-360)/60
                 if corr>1.0: corr = 1.0
                 elif corr<-1.0: corr = -1.0
                 s+=corr
             
             elif lyaw<-90 and yaw>90:
-                corr=(lyaw-yaw+360)/90
+                corr=(lyaw-yaw+360)/60
                 if corr>1.0: corr = 1.0
                 elif corr<-1.0: corr = -1.0
                 s+=corr
             
             else:
-                corr=(lyaw-yaw)/90
+                corr=(lyaw-yaw)/60
                 if corr>1.0: corr = 1.0
                 elif corr<-1.0: corr = -1.0
                 s+=corr

@@ -45,22 +45,20 @@ try:
     world.on_tick(lambda snap: leader.move())
 
     spawn.location.x += 12
-    spawn.location.y -= 6
     #sleep(2)
     model3.set_attribute('color','255,0,0')
-    #PlatooningFollower = world.spawn_actor(model3, spawn)
-    #actor_list.append(PlatooningFollower)
+    PlatooningFollower = world.spawn_actor(model3, spawn)
+    actor_list.append(PlatooningFollower)
     
-    #LidarFollower = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower)
-    #actor_list.append(LidarFollower)
+    LidarFollower = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower)
+    actor_list.append(LidarFollower)
 
-    #follower = Follower(PlatooningFollower, leader)
-    #leader.addFollower(follower)
-    #world.on_tick(lambda snap: follower.move())
+    follower = Follower(PlatooningFollower, leader)
+    leader.addFollower(follower)
+    world.on_tick(lambda snap: follower.move())
     #LidarFollower.listen(lambda points: follower.checkLidar(points))
 
     spawn.location.x += 12
-    spawn.location.y += 12
     #sleep(2)
     model3.set_attribute('color','0,255,0')
     PlatooningFollower2 = world.spawn_actor(model3, spawn)
@@ -69,7 +67,7 @@ try:
     LidarFollower2 = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower2)
     actor_list.append(LidarFollower2)
     
-    follower2 = Follower(PlatooningFollower2, leader)
+    follower2 = Follower(PlatooningFollower2, follower)
     leader.addFollower(follower2)
     world.on_tick(lambda snap: follower2.move())
     #LidarFollower2.listen(lambda points: follower2.checkLidar(points))
@@ -90,6 +88,6 @@ except KeyboardInterrupt:
 
 finally:
     print('destroying actors')
-    for actor in actor_list:
+    for actor in reversed(actor_list):
         actor.destroy()
     print('done.')

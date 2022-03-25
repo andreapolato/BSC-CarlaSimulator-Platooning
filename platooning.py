@@ -1,6 +1,8 @@
 import carla
 import math
 import numpy as np
+from cloud import SafeCloud
+
 
 def sign(number):
   if number>=0: return 1
@@ -41,6 +43,7 @@ class PlatoonMember:
 class Follower(PlatoonMember):
   
     leader: PlatoonMember
+    cloud: SafeCloud
     waypoints = []
   
     def __init__(self, vehicle:carla.Vehicle, lead:PlatoonMember):
@@ -63,11 +66,15 @@ class Follower(PlatoonMember):
         if self.leader_dist > self.safe_dist: self.big_dist = True
         else: self.big_dist = False
 
-    def checkLidar(self,points):
+    def connect_to_cloud(self, sc: SafeCloud):
+        self.cloud = sc
+        sc.add_members(self)
+
+    def check_lidar(self,points):
         detection=False
         danger_dist = self.speed/5
         for p in points:
-            if p.point.x<max(5,danger_dist):
+            if p.point.x<max(3,danger_dist):
                 detection= True
         self.override_brake=detection
 
@@ -77,7 +84,7 @@ class Follower(PlatoonMember):
     def setSpeedGoal(self, s):
         self.speedGoal = s
    
-    def defineThrottle(self):
+    def define_throttle(self):
         delta = self.speedGoal - self.speed
         t = b = 0.0
         if self.speedGoal>0.04:
@@ -96,7 +103,7 @@ class Follower(PlatoonMember):
         self.last_t=t
         return t, b
 
-    def defineSteer(self):
+    def define_steer(self):
         rl = self.waypoints
         fx = self.x
         fy = self.y
@@ -272,17 +279,22 @@ class Follower(PlatoonMember):
         if self.override_brake: control = carla.VehicleControl(throttle=0, steer=0, brake=1.0)
         else:
             if self.speed>0.03:
-                s = self.defineSteer()
-            t, b = self.defineThrottle()
+                s = self.define_steer()
+            t, b = self.define_throttle()
             control = carla.VehicleControl(throttle=t, steer=s, brake=b)
         self.vehicle.apply_control(control)
     
 class Leader(PlatoonMember):
 
+    cloudconnection: SafeCloud
     followers = []
 
     def __init__(self, vehicle: carla.Vehicle):
         super().__init__(vehicle)
+
+    def connect_to_cloud(self, sc: SafeCloud):
+        self.cloudconnection = sc
+        sc.set_leader(self)
 
     def addFollower(self, f: Follower):
         self.followers.append(f)

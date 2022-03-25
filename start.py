@@ -2,7 +2,7 @@ import random
 from time import sleep
 import carla
 from platooning import Follower, Leader
-#from platooning import Follower, Leader
+from cloud import SafeCloud
 
 actor_list = []
 traffic = [None]*10
@@ -42,12 +42,14 @@ try:
     lidar_bp.set_attribute('lower_fov','-5')
     lidar_bp.set_attribute('range','20.0')
 
+    cloud = SafeCloud()
 
     PlatooningLeader = world.spawn_actor(model3, spawn)
     PlatooningLeader.set_autopilot(True)
     actor_list.append(PlatooningLeader)
 
     leader = Leader(PlatooningLeader)
+    leader.connect_to_cloud(cloud)
 
     world.on_tick(lambda snap: leader.move())
 
@@ -63,14 +65,14 @@ try:
     model3.set_attribute('color','255,0,0')
     PlatooningFollower = world.spawn_actor(model3, spawn)
     actor_list.append(PlatooningFollower)
-    
+
     LidarFollower = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower)
     actor_list.append(LidarFollower)
 
     follower = Follower(PlatooningFollower, leader)
-    leader.addFollower(follower)
+    follower.connect_to_cloud(cloud)
     world.on_tick(lambda snap: follower.move())
-    LidarFollower.listen(lambda points: follower.checkLidar(points))
+    LidarFollower.listen(lambda points: follower.check_lidar(points))
 
     spawn.location.x += 12
     #sleep(2)
@@ -84,7 +86,7 @@ try:
     #follower2 = Follower(PlatooningFollower2, follower)
     #leader.addFollower(follower2)
     #world.on_tick(lambda snap: follower2.move())
-    #LidarFollower2.listen(lambda points: follower2.checkLidar(points))
+    #LidarFollower2.listen(lambda points: follower2.check_lidar(points))
 
 
     trans = spawn

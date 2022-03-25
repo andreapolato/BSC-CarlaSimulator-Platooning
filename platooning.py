@@ -38,26 +38,6 @@ class PlatoonMember:
     def get_pos(self):
         return self.x, self.y
     
-class Leader(PlatoonMember):
-    
-    followers = []
-   
-    def __init__(self, vehicle: carla.Vehicle):
-        super().__init__(vehicle)
-   
-    def addFollower(self, f: carla.Vehicle):
-        self.followers.append(f)
-   
-    def move(self):
-        self.update_position()
-        self.update_follower()
-
-    def update_follower(self):
-        for follower in self.followers:
-            if self.speed>0.03:
-                follower.addWaypoint([self.x, self.y, self.yaw, self.steer])
-                follower.setSpeedGoal(self.speed)
-
 class Follower(PlatoonMember):
   
     leader: PlatoonMember
@@ -85,13 +65,10 @@ class Follower(PlatoonMember):
 
     def checkLidar(self,points):
         detection=False
+        danger_dist = self.speed/5
         for p in points:
-            print(self.vehicle, p.point.x)
-            if p.point.x<self.safe_dist-5 and self.safe_dist<20:
+            if p.point.x<max(5,danger_dist):
                 detection= True
-            if self.safe_dist>20 and p.point.x<19:
-                detection=True
-                break
         self.override_brake=detection
 
     def addWaypoint(self, wp):
@@ -133,7 +110,7 @@ class Follower(PlatoonMember):
             lx = row[0]
             ly = row[1]
             lyaw = row[2]
-            toll = 0.1
+            toll = 0.15
             diff = ((fx-lx)**2 + (fy-ly)**2)**(1/2)
             if diff <= toll:
                 s=row[3]
@@ -300,3 +277,22 @@ class Follower(PlatoonMember):
             control = carla.VehicleControl(throttle=t, steer=s, brake=b)
         self.vehicle.apply_control(control)
     
+class Leader(PlatoonMember):
+
+    followers = []
+
+    def __init__(self, vehicle: carla.Vehicle):
+        super().__init__(vehicle)
+
+    def addFollower(self, f: Follower):
+        self.followers.append(f)
+
+    def move(self):
+        self.update_position()
+        self.update_follower()
+
+    def update_follower(self):
+        for follower in self.followers:
+            if self.speed>0.03:
+                follower.addWaypoint([self.x, self.y, self.yaw, self.steer])
+                follower.setSpeedGoal(self.speed)

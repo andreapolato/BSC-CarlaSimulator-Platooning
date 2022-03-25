@@ -96,14 +96,14 @@ try:
     trans.rotation.roll=0
     world.get_spectator().set_transform(trans)
 
-    for i in range (10):
-        traffic_spawn = random.choice(world.get_map().get_spawn_points())
-        model3.set_attribute('color','255,255,255')
-        try:
-            traffic[i] = world.spawn_actor(model3, traffic_spawn).set_autopilot(True)
-            actor_list.append(traffic[i])
-        except:
-            i -= 1
+    #for i in range (10):
+    #    traffic_spawn = random.choice(world.get_map().get_spawn_points())
+    #    model3.set_attribute('color','255,255,255')
+    #    try:
+    #        traffic[i] = world.spawn_actor(model3, traffic_spawn).set_autopilot(True)
+    #        actor_list.append(traffic[i])
+    #    except:
+    #        i -= 1
 
     while True:
         world.wait_for_tick()
@@ -112,7 +112,6 @@ except KeyboardInterrupt:
     pass
 
 finally:
-    print('destroying actors')
-    for actor in reversed(actor_list):
-        actor.destroy()
+    print('destroying actors')    
+    client.apply_batch([carla.command.DestroyActor(x) for x in actor_list])
     print('done.')

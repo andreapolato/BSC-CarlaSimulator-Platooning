@@ -1,3 +1,4 @@
+from typing_extensions import Self
 import carla
 import math
 import numpy as np
@@ -9,6 +10,7 @@ def sign(number):
   else: return -1
 
 class PlatoonMember:
+    waypoints = []
     
     def __init__(self, vehicle: carla.Vehicle):
         self.vehicle = vehicle
@@ -44,7 +46,6 @@ class Follower(PlatoonMember):
   
     leader: PlatoonMember
     cloud: SafeCloud
-    waypoints = []
   
     def __init__(self, vehicle:carla.Vehicle, lead:PlatoonMember):
         super().__init__(vehicle)
@@ -78,14 +79,14 @@ class Follower(PlatoonMember):
                 detection= True
         self.override_brake=detection
 
-    def addWaypoint(self, wp):
+    def add_waypoint(self, wp):
         self.waypoints.append(wp)
    
-    def setSpeedGoal(self, s):
+    def set_speed_goal(self, s):
         self.speedGoal = s
    
-    def define_throttle(self):
-        delta = self.speedGoal - self.speed
+    def define_throttle(self, sg, ss):
+        delta = sg - ss
         t = b = 0.0
         if self.speedGoal>0.04:
             if (delta>0):
@@ -103,11 +104,11 @@ class Follower(PlatoonMember):
         self.last_t=t
         return t, b
 
-    def define_steer(self):
-        rl = self.waypoints
-        fx = self.x
-        fy = self.y
-        rel_yaw = yaw = self.yaw
+    def define_steer(self, wp, x, y, ya):
+        rl = wp
+        fx = x
+        fy = y
+        rel_yaw = yaw = ya
         n=0
         limit=1000
         s=0.0
@@ -275,13 +276,26 @@ class Follower(PlatoonMember):
 
     def move(self):
         self.update_position()
-        s = 0.0
+        self.cloud.retrieve_check_data(self)
+        t = s = b = 0.0
         if self.override_brake: control = carla.VehicleControl(throttle=0, steer=0, brake=1.0)
         else:
             if self.speed>0.03:
-                s = self.define_steer()
-            t, b = self.define_throttle()
+                wp = self.waypoints
+                x = self.x
+                y = self.y
+                ya = self.yaw
+                s = self.define_steer(wp, x, y, ya)
+            sg = self.speedGoal
+            ss = self.speed
+            t, b = self.define_throttle(sg, ss)
             control = carla.VehicleControl(throttle=t, steer=s, brake=b)
+            cond, ct, cs, cb = self.cloud.check_action(self, t,s,b)
+            if cond:
+                self.vehicle.apply_control(control)
+            else:
+                print("ANOMALY DETECTED",t,ct,s,cs,b,cb)
+                control = carla.VehicleControl(throttle=ct, steer=cs, brake=cb)
         self.vehicle.apply_control(control)
     
 class Leader(PlatoonMember):
@@ -304,7 +318,8 @@ class Leader(PlatoonMember):
         self.update_follower()
 
     def update_follower(self):
+        self.waypoints.append([self.x, self.y, self.yaw, self.steer])
         for follower in self.followers:
             if self.speed>0.03:
-                follower.addWaypoint([self.x, self.y, self.yaw, self.steer])
-                follower.setSpeedGoal(self.speed)
+                follower.add_waypoint([self.x, self.y, self.yaw, self.steer])
+                follower.set_speed_goal(self.speed)

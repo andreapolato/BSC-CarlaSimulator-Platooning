@@ -6,6 +6,7 @@ class SafeCloud:
     def __init__(self):
         self.members =[]
         self.leader = None
+        self.check_args=[]
 
     def set_leader(self, l):
         if not self.leader: 
@@ -17,8 +18,28 @@ class SafeCloud:
         print(len(self.members))
         self.leader.addFollower(m)
 
-    def check_action(self,member,t,s,b):
+    def retrieve_check_data(self,vehicle):
         for elem in self.members:
-            if member==elem:
+            if vehicle==elem:
+                wp = elem.waypoints
                 x = elem.vehicle.get_transform().location.x
                 y = elem.vehicle.get_transform().location.y
+                ya = elem.vehicle.get_transform().rotation.yaw
+                sg = self.leader.speed
+                ss = elem.speed
+                self.check_args=[wp,x,y,ya,sg,ss]
+
+    def check_action(self,member,t,s,b):
+        cloud_t = cloud_s = cloud_b = 0.0
+        for elem in self.members:
+            if member==elem:
+                wp = self.check_args[0]
+                x = self.check_args[1]
+                y = self.check_args[2]
+                ya = self.check_args[3]
+                cloud_s = elem.define_steer(wp, x, y, ya)
+                sg = self.check_args[4]
+                ss = self.check_args[5]
+                cloud_t, cloud_b = elem.define_throttle(sg, ss)
+                break
+        return abs(cloud_b-b)<0.1 and abs(cloud_s-s)<0.1 and abs(cloud_t-t)<0.1, cloud_t, cloud_s, cloud_b

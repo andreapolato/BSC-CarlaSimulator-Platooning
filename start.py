@@ -70,10 +70,11 @@ try:
     #********************
     #---OBSTACLE SPAWN---
     #********************
+    #spawn.location.x += 12
     #model3.set_attribute('color','0,0,0')
     #obstacle = world.spawn_actor(model3, spawn)
     #actor_list.append(obstacle)
-    #spawn.location.x += 50
+    
     
 
     #********************
@@ -111,7 +112,7 @@ try:
     world.on_tick(lambda snap: follower2.move())
     LidarFollower2.listen(lambda points: follower2.check_lidar(points))
 
-
+    
     #*********************************
     #---POINT CAMERA TO SPAWN POINT---
     #*********************************
@@ -137,11 +138,11 @@ try:
 
     while True:
         world.wait_for_tick()
-        if random.randint(0,99) == 0:
-            print("ATTACK")
-            target = random.choice(platoon_members)
-            target.x = target.y = target.z = target.yaw = 0.0
-            target.control()
+        #if random.randint(0,99) == 0:
+        #    print("ATTACK")
+        #    target = random.choice(platoon_members)
+        #    target.x = target.y = target.z = target.yaw = 0.0
+        #    target.control()
 
 except KeyboardInterrupt:
     pass

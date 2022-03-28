@@ -1,4 +1,3 @@
-from typing_extensions import Self
 import carla
 import math
 import numpy as np
@@ -95,6 +94,7 @@ class Follower(PlatoonMember):
             else:
                 t = self.last_t
                 if not self.big_dist:
+                    t = 0.0
                     b = -delta/10 if -delta/10 <= 1.0 else 1.0
         else:
             if self.big_dist:

@@ -1,5 +1,19 @@
+import glob
+import os
+import sys
+
 import random
+from threading import Thread
 from time import sleep
+
+try:
+    sys.path.append(glob.glob('../carla/dist/carla-*%d.%d-%s.egg' % (
+        sys.version_info.major,
+        sys.version_info.minor,
+        'win-amd64' if os.name == 'nt' else 'linux-x86_64'))[0])
+except IndexError:
+    pass
+
 import carla
 from platooning import Follower, Leader
 from cloud import SafeCloud
@@ -16,7 +30,8 @@ try:
     client.set_timeout(5.0)
     
     world = client.get_world()
-    #world = client.load_world('Town06')
+    #world.unload_map_layer(carla.MapLayer.All)
+    #world.load_map_layer(carla.MapLayer.Ground)
     settings = world.get_settings()
     settings.fixed_delta_seconds = 0.01
     world.apply_settings(settings)
@@ -64,7 +79,7 @@ try:
     leader = Leader(PlatooningLeader)
     leader.connect_to_cloud(cloud)
 
-    world.on_tick(lambda snap: leader.move())
+    world.on_tick(lambda snap: Thread(leader.move()).start())
 
 
     #********************
@@ -81,6 +96,8 @@ try:
     #---SPAWN FOLLOWER---
     #********************
     spawn.location.x += 12
+    #spawn.location.y -= 4
+    #spawn.rotation.yaw=100
     model3.set_attribute('color','255,0,0')
     PlatooningFollower = world.spawn_actor(model3, spawn)
     actor_list.append(PlatooningFollower)
@@ -91,7 +108,7 @@ try:
     follower = Follower(PlatooningFollower, leader)
     follower.connect_to_cloud(cloud)
     platoon_members.append(follower)
-    world.on_tick(lambda snap: follower.move())
+    world.on_tick(lambda snap: Thread(follower.move()).start())
     LidarFollower.listen(lambda points: follower.check_lidar(points))
 
     
@@ -107,10 +124,10 @@ try:
     actor_list.append(LidarFollower2)
     
     follower2 = Follower(PlatooningFollower2, follower)
-    follower2.connect_to_cloud(cloud)
-    platoon_members.append(follower2)
-    world.on_tick(lambda snap: follower2.move())
-    LidarFollower2.listen(lambda points: follower2.check_lidar(points))
+    #follower2.connect_to_cloud(cloud)
+    #platoon_members.append(follower2)
+    #world.on_tick(lambda snap: Thread(follower2.move()).start())
+    #LidarFollower2.listen(lambda points: follower2.check_lidar(points))
 
     
     #*********************************

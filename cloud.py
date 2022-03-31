@@ -13,7 +13,7 @@ class SafeCloud:
 
     def add_members(self, m):
         self.members.append(m)
-        print(len(self.members))
+        print("Connected followers:",len(self.members))
         self.leader.addFollower(m)
 
     def retrieve_check_data(self,vehicle):

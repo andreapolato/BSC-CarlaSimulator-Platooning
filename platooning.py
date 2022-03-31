@@ -118,7 +118,7 @@ class Follower(PlatoonMember):
             lx = row[0]
             ly = row[1]
             lyaw = row[2]
-            toll = 0.15
+            toll = (0.1**2+0.1**2)**(1/2)
             diff = ((fx-lx)**2 + (fy-ly)**2)**(1/2)
             if diff <= toll:
                 s=row[3]
@@ -154,14 +154,14 @@ class Follower(PlatoonMember):
         #same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
         
         corr = (lyaw-yaw)/90
-        if abs(lyaw)<=10: #going east
+        if abs(lyaw)<=5: #going east
             s=(rel_y-fy)/10
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
             if corr>1.0: corr = 1.0
             elif corr<-1.0: corr = -1.0
             s+=corr
-        elif abs(lyaw)>=170: #going ovest
+        elif abs(lyaw)>=175: #going ovest
             if lyaw>90 and yaw<-90:
                 corr-=4
                 s=(fy-rel_y)/10
@@ -186,7 +186,7 @@ class Follower(PlatoonMember):
                 elif corr<-1.0: corr = -1.0
                 s+=corr
 
-        elif lyaw<100 and lyaw>80: #going south
+        elif lyaw<95 and lyaw>85: #going south
             s=(fx-rel_x)/10
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
@@ -194,7 +194,7 @@ class Follower(PlatoonMember):
             elif corr<-1.0: corr = -1.0
             s+=corr
             
-        elif lyaw>-100 and lyaw<-80: #going north
+        elif lyaw>-95 and lyaw<-85: #going north
             s=(rel_x-fx)/10 
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
@@ -255,19 +255,19 @@ class Follower(PlatoonMember):
             elif s<-1.0: s=-1.0
 
             if lyaw>90 and yaw<-90:
-                corr=(lyaw-yaw-360)/90
+                corr=(lyaw-yaw-360)/60
                 if corr>1.0: corr = 1.0
                 elif corr<-1.0: corr = -1.0
                 s+=corr
             
             elif lyaw<-90 and yaw>90:
-                corr=(lyaw-yaw+360)/90
+                corr=(lyaw-yaw+360)/60
                 if corr>1.0: corr = 1.0
                 elif corr<-1.0: corr = -1.0
                 s+=corr
             
             else:
-                corr=(lyaw-yaw)/90
+                corr=(lyaw-yaw)/60
                 if corr>1.0: corr = 1.0
                 elif corr<-1.0: corr = -1.0
                 s+=corr

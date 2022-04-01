@@ -1,32 +1,7 @@
-<span class="smallcaps">Università degli Studi  
-di Padova</span>  
-<img src="./docs/imgs/UniPd.png" alt="drawing" width="120"/>
-<img src="./docs/imgs/DM_UniPD.png" alt="drawing" width="120"/>
-<span>A.A. 2021-2022</span>  
-
------
-
-  
-<span>**Documento tecnico: Platooning in CARLA Simulator**</span>  
-
------
-
-  
-
-|                                |                            |
-| :----------------------------- | :------------------------- |
-| *Studente*                     | *Responsabili di progetto* |
-| Andrea Polato \[Mat. 1201205\] | Alessandro Brighente       |
-|                                | Denis Donadel              |
-|                                |                            |
-
 # Introduzione
 
-Lo scopo di questo documento è quello di raccogliere le informazioni
-riguardanti le attività svolte durante il periodo di stage interno.
-Verranno analizzate le operazioni da eseguire per interagire con il
-simulatore, si spiegherà il codice sviluppato e verranno esposti i
-problemi noti.
+La repository contiene degli script sviluppati in Python per ricreare una situazione di platooning sfruttando il simulatore CARLA.
+
 
 # Tecnologie usate
 
@@ -109,10 +84,9 @@ rappresentazione in classi che contiene al suo interno un riferimento al
 veicolo del package di CARLA. In questo modo i veicoli raggiungono un
 livello di astrazione superiore che li dota dei metodi necessari alla
 comunicazione e all’impostazione dei parametri di guida. Di seguito
-(Figura [1](#fig:class)) è visibile un diagramma delle classi
-menzionate:
+è visibile un diagramma delle classi menzionate:
 
-![Diagramma delle classi del platooning](imgs/class_diag.png)
+<img src="imgs/class_diag.png" alt="Diagramma delle classi" width="280">
 
   
 Come si può notare, è anche presente una classe chiamata `SafeCloud`, il

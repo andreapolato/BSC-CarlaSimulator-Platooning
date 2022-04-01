@@ -86,7 +86,7 @@ livello di astrazione superiore che li dota dei metodi necessari alla
 comunicazione e all’impostazione dei parametri di guida. Di seguito
 è visibile un diagramma delle classi menzionate:
 
-<img src="docs/imgs/class_diag.png" alt="Diagramma delle classi">
+<img src="docs/imgs/class_diag.svg" alt="Diagramma delle classi">
 
   
 Come si può notare, è anche presente una classe chiamata `SafeCloud`, il

@@ -2,13 +2,15 @@ import os
 import re
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
-from math import acos
 from PIL import ImageFile
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+from matplotlib import pyplot as plt
+from math import acos
 
-def detect(img):
+
+def detect():
+    img = cv2.imread('./camera_samples/90810.png')
     dmy = img.copy()
 
     edges = cv2.Canny(img,100,200)
@@ -39,7 +41,6 @@ def detect(img):
     #if n>max_lines:
     #    max_lines=n
     #    def_lines=lines
-
 
     left_points=[]
     right_points=[]
@@ -108,11 +109,21 @@ def detect(img):
     ip = (l**2 + abs(c)**2)**0.5
     cos_alpha = l/ip
     
-    #plt.subplot(121)
-    #plt.imshow(img,cmap = 'gray')
-    #plt.title('Original Image'), plt.xticks([]), plt.yticks([])
-    #plt.subplot(122),plt.imshow(dmy,cmap = 'gray')
-    #plt.title('Edge Image'), plt.xticks([]), plt.yticks([])
-    #plt.show()
+    plt.subplot(121)
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB),cmap = 'gray')
+    plt.title('Original Image'), plt.xticks([]), plt.yticks([])
+    plt.subplot(122)
+    plt.imshow(cv2.cvtColor(dmy, cv2.COLOR_BGR2RGB),cmap = 'gray')
+    plt.title('Elaborated Image'), plt.xticks([]), plt.yticks([])
+    plt.show()
 
     return dmy, c
+
+if __name__ == '__main__':
+
+    try:
+        detect()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print('\ndone.')

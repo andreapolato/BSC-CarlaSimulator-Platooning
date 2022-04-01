@@ -1,32 +1,7 @@
-<span class="smallcaps">Università degli Studi  
-di Padova</span>  
-![image](./imgs/UniPd.png)  
-![image](./imgs/DM_UniPD.png)  
-<span>A.A. 2021-2022</span>  
-
------
-
-  
-<span>**Documento tecnico: Platooning in CARLA Simulator**</span>  
-
------
-
-  
-
-|                                |                            |
-| :----------------------------- | :------------------------- |
-| *Studente*                     | *Responsabili di progetto* |
-| Andrea Polato \[Mat. 1201205\] | Alessandro Brighente       |
-|                                | Denis Donadel              |
-|                                |                            |
-
 # Introduzione
 
-Lo scopo di questo documento è quello di raccogliere le informazioni
-riguardanti le attività svolte durante il periodo di stage interno.
-Verranno analizzate le operazioni da eseguire per interagire con il
-simulatore, si spiegherà il codice sviluppato e verranno esposti i
-problemi noti.
+La repository contiene degli script sviluppati in Python per ricreare una situazione di platooning sfruttando il simulatore CARLA.
+
 
 # Tecnologie usate
 
@@ -109,10 +84,9 @@ rappresentazione in classi che contiene al suo interno un riferimento al
 veicolo del package di CARLA. In questo modo i veicoli raggiungono un
 livello di astrazione superiore che li dota dei metodi necessari alla
 comunicazione e all’impostazione dei parametri di guida. Di seguito
-(Figura [1](#fig:class)) è visibile un diagramma delle classi
-menzionate:
+è visibile un diagramma delle classi menzionate:
 
-![Diagramma delle classi del platooning](imgs/class_diag.png)
+<img src="docs/imgs/class_diag.png" alt="Diagramma delle classi">
 
   
 Come si può notare, è anche presente una classe chiamata `SafeCloud`, il
@@ -176,7 +150,7 @@ ricorrere a modelli di apprendimento automatico.
 Di seguito è consultabile una lista di problemi riscontrati durante il
 periodo in cui mi sono occupato del progetto:
 
-  - per platooning di dimensioni \(\geq3\) i veicoli assumono
+  - per platooning di dimensioni >=3 i veicoli assumono
     comportamenti imprevedibili, in particolare il leader, che non
     dovrebbe mai avere problemi a rispettare le regole stradali in
     quanto gestito direttamente dal simulatore;
@@ -190,4 +164,4 @@ periodo in cui mi sono occupato del progetto:
 Se si desidera consultare una spiegazione più approfondita
 dell’implementazione dei vari algoritmi e del modello matematico alla
 base delle correzioni di traiettoria lascio il riferimento alla mia tesi
-di laurea recuperabile al seguente [link]().
+di laurea recuperabile all'interno della cartella `docs`.

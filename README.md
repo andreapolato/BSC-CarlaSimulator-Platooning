@@ -8,8 +8,8 @@ La repository contiene degli script sviluppati in Python per ricreare una situaz
 Per poter utilizzare correttamente gli script prodotti è necessario
 soddisfare alcuni vincoli di installazione. Raccomando di seguire il
 tutorial di installazione rapida di CARLA consultabile a questo
-[link](https://carla.readthedocs.io/en/latest/start_quickstart/), ma se
-si desidera saltarlo qui sotto sono riportate le dipendenze software.
+[link](https://carla.readthedocs.io/en/latest/start_quickstart/), ma, se
+si desidera saltarlo, qui sotto sono riportate le dipendenze software.
 
   - [CARLA v0.9.13 ](https://github.com/carla-simulator/carla/releases);
 
@@ -24,7 +24,7 @@ si desidera saltarlo qui sotto sono riportate le dipendenze software.
 
 Di fondamentale importanza è verificare che la versione di Python sia
 quella indicata, versioni più recenti impediscono agli script di
-recuperare il package `carla`, fondamentale per l’interazione con il
+recuperare il package `carla`, essenziale per l’interazione con il
 server.  
 Sono inoltre necessari altri requisiti non legati alla parte software,
 ovvero:
@@ -113,8 +113,8 @@ della corsia per i veicoli virtuali. Purtroppo questa strada è stata poi
 abbandonata a causa del tempo che sarebbe stato necessario ad ottenere
 risultati consistenti. Facendo uso di reti neurali potrebbe, tuttavia,
 portare a risultati molto soddisfacenti e sarebbe un’ottima aggiunta al
-sistema realizzato. Il file `lane_detector.py` fornisce un funzione che
-prende in input un immagine e la elabora in modo da identificare le
+sistema realizzato. Il file `lane_detector.py` fornisce una funzione che
+prende in input un'immagine e la elabora in modo da identificare le
 strisce delle corsie. Una volta fatto, individua il centro della corsia
 e l’angolo compreso tra essa e la traiettoria del veicolo. Ritornando
 questo valore si potrebbe regolare la direzione di un’auto partendo dai
@@ -163,5 +163,5 @@ periodo in cui mi sono occupato del progetto:
 
 Se si desidera consultare una spiegazione più approfondita
 dell’implementazione dei vari algoritmi e del modello matematico alla
-base delle correzioni di traiettoria lascio il riferimento alla mia tesi
+base delle correzioni di traiettoria, lascio il riferimento alla mia tesi
 di laurea recuperabile all'interno della cartella `docs`.

@@ -1,7 +1,7 @@
 <span class="smallcaps">Università degli Studi  
 di Padova</span>  
-![image](./docs/imgs/UniPd.png)  
-![image](./docs/imgs/DM_UniPD.png)  
+<img src="./docs/imgs/UniPd.png" alt="drawing" width="120"/>
+<img src="./docs/imgs/DM_UniPD.png" alt="drawing" width="120"/>
 <span>A.A. 2021-2022</span>  
 
 -----

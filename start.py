@@ -124,10 +124,10 @@ try:
     actor_list.append(LidarFollower2)
     
     follower2 = Follower(PlatooningFollower2, follower)
-    #follower2.connect_to_cloud(cloud)
-    #platoon_members.append(follower2)
-    #world.on_tick(lambda snap: Thread(follower2.move()).start())
-    #LidarFollower2.listen(lambda points: follower2.check_lidar(points))
+    follower2.connect_to_cloud(cloud)
+    platoon_members.append(follower2)
+    world.on_tick(lambda snap: Thread(follower2.move()).start())
+    LidarFollower2.listen(lambda points: follower2.check_lidar(points))
 
     
     #*********************************

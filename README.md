@@ -1,7 +1,7 @@
 <span class="smallcaps">Università degli Studi  
 di Padova</span>  
-![image](./imgs/UniPd.png)  
-![image](./imgs/DM_UniPD.png)  
+![image](./docs/imgs/UniPd.png)  
+![image](./docs/imgs/DM_UniPD.png)  
 <span>A.A. 2021-2022</span>  
 
 -----
@@ -176,7 +176,7 @@ ricorrere a modelli di apprendimento automatico.
 Di seguito è consultabile una lista di problemi riscontrati durante il
 periodo in cui mi sono occupato del progetto:
 
-  - per platooning di dimensioni \(\geq3\) i veicoli assumono
+  - per platooning di dimensioni >=3 i veicoli assumono
     comportamenti imprevedibili, in particolare il leader, che non
     dovrebbe mai avere problemi a rispettare le regole stradali in
     quanto gestito direttamente dal simulatore;
@@ -190,4 +190,4 @@ periodo in cui mi sono occupato del progetto:
 Se si desidera consultare una spiegazione più approfondita
 dell’implementazione dei vari algoritmi e del modello matematico alla
 base delle correzioni di traiettoria lascio il riferimento alla mia tesi
-di laurea recuperabile al seguente [link]().
+di laurea recuperabile all'interno della cartella `docs`.

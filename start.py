@@ -51,7 +51,7 @@ try:
     #---CARS SETUP---
     #****************
     #spawn = random.choice(world.get_map().get_spawn_points())
-    spawn = carla.Transform(carla.Location(x=25.407496, y=133.728470, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.647827, roll=0.000000))
+    spawn = carla.Transform(carla.Location(x=-25.407496, y=133.728470, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.647827, roll=0.000000))
     model3 = blueprint_library.filter('model3')[0]
    
    
@@ -105,7 +105,7 @@ try:
     LidarFollower = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower)
     actor_list.append(LidarFollower)
 
-    follower = Follower(PlatooningFollower, leader)
+    follower = Follower(PlatooningFollower)
     follower.connect_to_cloud(cloud)
     platoon_members.append(follower)
     world.on_tick(lambda snap: Thread(follower.move()).start())
@@ -123,7 +123,7 @@ try:
     LidarFollower2 = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower2)
     actor_list.append(LidarFollower2)
     
-    follower2 = Follower(PlatooningFollower2, follower)
+    follower2 = Follower(PlatooningFollower2)
     follower2.connect_to_cloud(cloud)
     platoon_members.append(follower2)
     world.on_tick(lambda snap: Thread(follower2.move()).start())
@@ -134,7 +134,8 @@ try:
     #---POINT CAMERA TO SPAWN POINT---
     #*********************************
     trans = spawn
-    trans.location.z = 100
+    trans.location.x -= 12
+    trans.location.z = 70
     trans.rotation.pitch=-90
     trans.rotation.yaw=0
     trans.rotation.roll=0
@@ -155,11 +156,10 @@ try:
 
     while True:
         world.wait_for_tick()
-        #if random.randint(0,99) == 0:
-        #    print("ATTACK")
-        #    target = random.choice(platoon_members)
-        #    target.x = target.y = target.z = target.yaw = 0.0
-        #    target.control()
+        print("ATTACK")
+        target = follower
+        target.x = target.y = target.z = target.yaw = random.randint(-100,100)
+        target.control()
 
 except KeyboardInterrupt:
     pass

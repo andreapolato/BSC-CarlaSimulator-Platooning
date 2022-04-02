@@ -12,6 +12,13 @@ class SafeCloud:
             print("Leader set.")
 
     def add_members(self, m):
+        if len(self.members)>0:
+            l = self.members[-1]
+        elif self.leader!=None:
+            l = self.leader
+        else:
+            return
+        m.set_leading_vehicle(l)
         self.members.append(m)
         print("Connected followers:",len(self.members))
         self.leader.addFollower(m)
@@ -40,4 +47,5 @@ class SafeCloud:
                 ss = self.check_args[5]
                 cloud_t, cloud_b = elem.define_throttle(sg, ss)
                 break
-        return abs(cloud_b-b)<0.1 and abs(cloud_s-s)<0.1 and abs(cloud_t-t)<0.1, cloud_t, cloud_s, cloud_b
+        cond = abs(cloud_b-b)<0.1 and abs(cloud_s-s)<0.1 and abs(cloud_t-t)<0.1
+        return cond, cloud_t, cloud_s, cloud_b

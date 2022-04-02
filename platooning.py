@@ -46,15 +46,17 @@ class Follower(PlatoonMember):
     leader: PlatoonMember
     cloud: SafeCloud
   
-    def __init__(self, vehicle:carla.Vehicle, lead:PlatoonMember):
+    def __init__(self, vehicle:carla.Vehicle):
         super().__init__(vehicle)
-        self.leader = lead
         self.speedGoal = 0.0
         self.last_t = 0.0
         self.big_dist = False
         self.leader_dist = 0.0
         self.safe_dist = 12.0
         self.override_brake = False
+
+    def set_leading_vehicle(self, lead:PlatoonMember):
+        self.leader = lead
 
     def update_position(self):
         super().update_position()
@@ -293,9 +295,7 @@ class Follower(PlatoonMember):
             t, b = self.define_throttle(sg, ss)
             control = carla.VehicleControl(throttle=t, steer=s, brake=b)
             cond, ct, cs, cb = self.cloud.check_action(self, t,s,b)
-            if cond:
-                self.vehicle.apply_control(control)
-            else:
+            if not cond:
                 print("ANOMALY DETECTED",t,ct,s,cs,b,cb)
                 control = carla.VehicleControl(throttle=ct, steer=cs, brake=cb)
         self.vehicle.apply_control(control)

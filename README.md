@@ -11,7 +11,7 @@ tutorial di installazione rapida di CARLA consultabile a questo
 [link](https://carla.readthedocs.io/en/latest/start_quickstart/), ma, se
 si desidera saltarlo, qui sotto sono riportate le dipendenze software.
 
-  - [CARLA v0.9.13 ](https://github.com/carla-simulator/carla/releases);
+  - [CARLA v0.9.13](https://github.com/carla-simulator/carla/releases);
 
   - <span>\[Opzionale\]</span> [Paccheto mappe aggiuntive per CARLA
     v0.9.13](https://github.com/carla-simulator/carla/releases);
@@ -20,7 +20,7 @@ si desidera saltarlo, qui sotto sono riportate le dipendenze software.
 
   - pip o pip3 aggiornato;
 
-  - <span>\[Python package\]</span> NumPy
+  - <span>\[Python package\]</span> NumPy.
 
 Di fondamentale importanza è verificare che la versione di Python sia
 quella indicata, versioni più recenti impediscono agli script di
@@ -34,7 +34,7 @@ ovvero:
   - 20GB di spazio su disco;
 
   - due porte TCP libere (di default corrispondono alle porte 2000 e
-    2001)
+    2001).
 
 # Istruzioni per l’interazione
 
@@ -159,7 +159,7 @@ periodo in cui mi sono occupato del progetto:
     possibilmente andando ad integrare lo script di riconoscimento della
     corsia oppure trovando il modo di rappresentare il punto da
     raggiungere in coordinate relative alla posizione del veicolo
-    anziché mantenerle assolute come allo stato attuale;
+    anziché mantenerle assolute come allo stato attuale.
 
 Se si desidera consultare una spiegazione più approfondita
 dell’implementazione dei vari algoritmi e del modello matematico alla

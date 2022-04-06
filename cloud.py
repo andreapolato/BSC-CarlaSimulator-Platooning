@@ -17,6 +17,7 @@ class SafeCloud:
         elif self.leader!=None:
             l = self.leader
         else:
+            print("No leader available")
             return
         m.set_leading_vehicle(l)
         self.members.append(m)

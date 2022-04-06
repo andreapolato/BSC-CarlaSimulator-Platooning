@@ -2,7 +2,6 @@ import glob
 import os
 import sys
 
-import random
 from threading import Thread
 from time import sleep
 
@@ -30,14 +29,14 @@ try:
     client.set_timeout(5.0)
     
     world = client.get_world()
-    #world.unload_map_layer(carla.MapLayer.All)
-    #world.load_map_layer(carla.MapLayer.Ground)
     settings = world.get_settings()
     settings.fixed_delta_seconds = 0.01
+    settings.synchronous_mode = True
     world.apply_settings(settings)
 
     blueprint_library = world.get_blueprint_library()
 
+    cloud = SafeCloud()
     
     #*******************
     #---TRASH CLEANUP---
@@ -50,7 +49,6 @@ try:
     #****************
     #---CARS SETUP---
     #****************
-    #spawn = random.choice(world.get_map().get_spawn_points())
     spawn = carla.Transform(carla.Location(x=-25.407496, y=133.728470, z=0.600000), carla.Rotation(pitch=0.000000, yaw=-179.647827, roll=0.000000))
     model3 = blueprint_library.filter('model3')[0]
    
@@ -66,8 +64,6 @@ try:
     lidar_bp.set_attribute('lower_fov','-5')
     lidar_bp.set_attribute('range','20.0')
 
-    cloud = SafeCloud()
-
     
     #******************
     #---SPAWN LEADER---
@@ -82,29 +78,24 @@ try:
     world.on_tick(lambda snap: Thread(leader.move()).start())
 
 
-    #********************
-    #---OBSTACLE SPAWN---
-    #********************
+    #*********************************
+    #---UNCOMMENT TO SPAWN OBSTACLE---
+    #*********************************
     #spawn.location.x += 12
     #model3.set_attribute('color','0,0,0')
     #obstacle = world.spawn_actor(model3, spawn)
     #actor_list.append(obstacle)
-    
     
 
     #********************
     #---SPAWN FOLLOWER---
     #********************
     spawn.location.x += 12
-    #spawn.location.y -= 4
-    #spawn.rotation.yaw=100
     model3.set_attribute('color','255,0,0')
     PlatooningFollower = world.spawn_actor(model3, spawn)
     actor_list.append(PlatooningFollower)
-
     LidarFollower = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower)
     actor_list.append(LidarFollower)
-
     follower = Follower(PlatooningFollower)
     follower.connect_to_cloud(cloud)
     platoon_members.append(follower)
@@ -119,10 +110,8 @@ try:
     model3.set_attribute('color','0,255,0')
     PlatooningFollower2 = world.spawn_actor(model3, spawn)
     actor_list.append(PlatooningFollower2)
-    
     LidarFollower2 = world.spawn_actor(lidar_bp, sensor_spawn, attach_to=PlatooningFollower2)
     actor_list.append(LidarFollower2)
-    
     follower2 = Follower(PlatooningFollower2)
     follower2.connect_to_cloud(cloud)
     platoon_members.append(follower2)
@@ -142,24 +131,15 @@ try:
     world.get_spectator().set_transform(trans)
 
 
-    #**********************
-    #---GENERATE TRAFFIC---
-    #**********************
-    #for i in range (10):
-    #    traffic_spawn = random.choice(world.get_map().get_spawn_points())
-    #    model3.set_attribute('color','255,255,255')
-    #    try:
-    #        traffic[i] = world.spawn_actor(model3, traffic_spawn).set_autopilot(True)
-    #        actor_list.append(traffic[i])
-    #    except:
-    #        i -= 1
-
     while True:
-        world.wait_for_tick()
-        print("ATTACK")
-        target = follower
-        target.x = target.y = target.z = target.yaw = random.randint(-100,100)
-        target.control()
+        world.tick()
+        #**************************************
+        #---UNCOMMENT TO SIMULATE THE ATTACK---
+        #**************************************
+        #print("ATTACK")
+        #target = follower
+        #target.x = target.y = target.z = target.yaw = random.randint(-100,100)
+        #target.control()
 
 except KeyboardInterrupt:
     pass

@@ -9,8 +9,6 @@ def sign(number):
   else: return -1
 
 class PlatoonMember:
-    waypoints = []
-    
     def __init__(self, vehicle: carla.Vehicle):
         self.vehicle = vehicle
         tr = self.vehicle.get_transform()
@@ -24,6 +22,8 @@ class PlatoonMember:
         self.throttle = con.throttle
         self.steer = con.steer
         self.brake = con.brake
+        self.cloud: SafeCloud = None
+        self.waypoints = []
     
     def update_position(self):
         tr = self.vehicle.get_transform()
@@ -42,10 +42,6 @@ class PlatoonMember:
         return self.x, self.y
     
 class Follower(PlatoonMember):
-  
-    leader: PlatoonMember
-    cloud: SafeCloud
-  
     def __init__(self, vehicle:carla.Vehicle):
         super().__init__(vehicle)
         self.speedGoal = 0.0
@@ -54,9 +50,12 @@ class Follower(PlatoonMember):
         self.leader_dist = 0.0
         self.safe_dist = 12.0
         self.override_brake = False
+        self.leader: PlatoonMember = None
+
 
     def set_leading_vehicle(self, lead:PlatoonMember):
-        self.leader = lead
+        if not self.leader:
+            self.leader = lead
 
     def update_position(self):
         super().update_position()
@@ -69,7 +68,8 @@ class Follower(PlatoonMember):
         else: self.big_dist = False
 
     def connect_to_cloud(self, sc: SafeCloud):
-        self.cloud = sc
+        if not self.cloud:
+            self.cloud = sc
         sc.add_members(self)
 
     def check_lidar(self,points):
@@ -150,12 +150,9 @@ class Follower(PlatoonMember):
                         delta_x = abs(lx-fx)
                     if abs(ly-fy) < delta_y:
                         delta_y = abs(ly-fy)                        
-
         lyaw = rel_yaw
-        #yaw_condition = sign(lyaw)==sign(yaw) or (abs(lyaw)>90 and abs(yaw)>90)
-        #same_yaw = abs(lyaw-yaw)<3 if yaw_condition else abs(lyaw+yaw)<3
-        
         corr = (lyaw-yaw)/90
+
         if abs(lyaw)<=5: #going east
             s=(rel_y-fy)/10
             if s>1.0: s=1.0
@@ -187,7 +184,6 @@ class Follower(PlatoonMember):
                 if corr>1.0: corr = 1.0
                 elif corr<-1.0: corr = -1.0
                 s+=corr
-
         elif lyaw<95 and lyaw>85: #going south
             s=(fx-rel_x)/10
             if s>1.0: s=1.0
@@ -195,7 +191,6 @@ class Follower(PlatoonMember):
             if corr>1.0: corr = 1.0
             elif corr<-1.0: corr = -1.0
             s+=corr
-            
         elif lyaw>-95 and lyaw<-85: #going north
             s=(rel_x-fx)/10 
             if s>1.0: s=1.0
@@ -204,7 +199,6 @@ class Follower(PlatoonMember):
             elif corr<-1.0: corr = -1.0
             s+=corr
         
-
         else:
             if yaw>-180 and yaw<=-90:
                 if sign(rel_x)==sign(fx): fx=-fx
@@ -250,8 +244,6 @@ class Follower(PlatoonMember):
                 if ys > 1.0: ys = 1.0
                 elif ys < -1.0: ys = -1.0
             
-            #if sign(l_pos)==sign(f_pos): l_pos = -l_pos
-
             s = (xs+ys)
             if s>1.0: s=1.0
             elif s<-1.0: s=-1.0
@@ -274,6 +266,8 @@ class Follower(PlatoonMember):
                 elif corr<-1.0: corr = -1.0
                 s+=corr
         
+        if s>1.0: s=1.0
+        elif s<-1.0: s=-1.0
         return s
 
     def move(self):
@@ -301,15 +295,13 @@ class Follower(PlatoonMember):
         self.vehicle.apply_control(control)
     
 class Leader(PlatoonMember):
-
-    cloudconnection: SafeCloud
-    followers = []
-
     def __init__(self, vehicle: carla.Vehicle):
         super().__init__(vehicle)
+        self.followers = []
 
     def connect_to_cloud(self, sc: SafeCloud):
-        self.cloudconnection = sc
+        if not self.cloud:
+            self.cloud = sc
         sc.set_leader(self)
 
     def addFollower(self, f: Follower):
